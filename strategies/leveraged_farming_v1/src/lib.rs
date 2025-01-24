@@ -1,47 +1,63 @@
 use scrypto::prelude::*;
 
 #[blueprint]
-mod hello {
-    struct Hello {
-        // Define what resources and data will be managed by Hello components
-        sample_vault: Vault,
-    }
+mod leveraged_farming_v1_factory {
+    //] --------------- Scrypto Setup -------------- /
 
-    impl Hello {
-        // Implement the functions and methods which will manage those resources and data
+    //] ------------- Factory Blueprint ------------- /
 
-        // This is a function, and can be called directly on the blueprint once deployed
-        pub fn instantiate_hello() -> Global<Hello> {
-            // Create a new token called "HelloToken," with a fixed supply of 1000, and put that supply into a bucket
-            let my_bucket: Bucket = ResourceBuilder::new_fungible(OwnerRole::None)
-                .divisibility(DIVISIBILITY_MAXIMUM)
-                .metadata(metadata! {
-                    init {
-                        "name" => "HelloToken", locked;
-                        "symbol" => "HT", locked;
-                    }
-                })
-                .mint_initial_supply(1000)
-                .into();
+    struct LeveragedFarmingV1Factory {}
 
-            // Instantiate a Hello component, populating its vault with our supply of 1000 HelloToken
-            Self {
-                sample_vault: Vault::with_bucket(my_bucket),
-            }
-            .instantiate()
-            .prepare_to_globalize(OwnerRole::None)
-            .globalize()
-        }
+    impl LeveragedFarmingV1Factory {
+        pub fn instantiate(dapp_definition_address: ComponentAddress, owner_badge: Proof) -> Global<LeveragedFarmingV1Factory> {
+            // Reserve address
+            let (address_reservation, component_address) = Runtime::allocate_component_address(LeveragedFarmingV1Factory::blueprint_id());
 
-        // This is a method, because it needs a reference to self.  Methods can only be called on components
-        pub fn free_token(&mut self) -> Bucket {
-            info!(
-                "My balance is: {} HelloToken. Now giving away a token!",
-                self.sample_vault.amount()
-            );
-            // If the semi-colon is omitted on the last line, the last value seen is automatically returned
-            // In this case, a bucket containing 1 HelloToken is returned
-            self.sample_vault.take(1)
+            //] Authorisation
+            // Component
+            let component_access_rule: AccessRule = rule!(require(global_caller(component_address)));
+
+            // Component owner
+            // - let owner_badge: Bucket = ResourceBuilder::new_fungible(OwnerRole::None)
+            // -     .divisibility(DIVISIBILITY_NONE)
+            // -     .metadata(metadata! {init {
+            // -         "name"        => "Lattic3 Owner Badge", locked;
+            // -         "description" => "Badge representing the owner of the Lattic3 lending platform", locked;
+            // -     }})
+            // -     .mint_initial_supply(1)
+            // -     .into();
+            let owner_access_rule: AccessRule = rule!(require(owner_badge.resource_address()));
+            let owner_role: OwnerRole = OwnerRole::Fixed(owner_access_rule.clone());
+
+            //] Component Instantisation
+            // Metadata
+            let component_metadata = metadata! {
+                roles {
+                    metadata_setter         => OWNER;
+                    metadata_setter_updater => OWNER;
+                    metadata_locker         => OWNER;
+                    metadata_locker_updater => rule!(deny_all);
+                },
+                init {
+                    "name"            => "L3//Factory - Leveraged Yield Farming v0.1", locked;
+                    "description"     => "Lattic3 factory component for the 'Leveraged Yield Farming V1' strategy.", locked;
+                    "dapp_definition" => dapp_definition_address, updatable;
+                }
+            };
+
+            // Roles
+            // let component_roles = roles! {};
+
+            // Instantisation
+            let component: Global<LeveragedFarmingV1Factory> = Self {}
+                .instantiate()
+                .prepare_to_globalize(owner_role)
+                // .roles(component_roles)
+                .metadata(component_metadata)
+                .with_address(address_reservation)
+                .globalize();
+
+            component
         }
     }
 }
