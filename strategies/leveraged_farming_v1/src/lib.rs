@@ -1,5 +1,7 @@
+/* ------------------ Imports ----------------- */
 use scrypto::prelude::*;
 
+/* ----------------- Blueprint ---------------- */
 #[blueprint]
 mod leveraged_farming_v1_factory {
     //] --------------- Scrypto Setup -------------- /
