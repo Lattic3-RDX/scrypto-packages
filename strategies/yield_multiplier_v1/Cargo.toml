@@ -1,5 +1,5 @@
 [package]
-name = "leveraged_farming_v1"
+name = "yield_multiplier_v1"
 version = "1.0.0"
 edition = "2021"
 

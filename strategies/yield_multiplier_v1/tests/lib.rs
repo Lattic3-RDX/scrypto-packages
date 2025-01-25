@@ -1,6 +1,6 @@
 /* ------------------ Imports ----------------- */
-use leveraged_farming_v1::leveraged_farming_v1_factory_test::*;
 use scrypto_test::prelude::*;
+use yield_multiplier_v1_cluster::yield_multiplier_v1_cluster_test::*;
 
 /* ------------------- Tests ------------------ */
 #[test]

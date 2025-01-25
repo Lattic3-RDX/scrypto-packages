@@ -3,17 +3,17 @@ use scrypto::prelude::*;
 
 /* ----------------- Blueprint ---------------- */
 #[blueprint]
-mod leveraged_farming_v1_factory {
+mod yield_multiplier_v1_cluster {
     //] --------------- Scrypto Setup -------------- /
 
-    //] ------------- Factory Blueprint ------------- /
+    //] ------------- Cluster Blueprint ------------ /
 
-    struct LeveragedFarmingV1Factory {}
+    struct YieldMultiplierV1 {}
 
-    impl LeveragedFarmingV1Factory {
-        pub fn instantiate(dapp_definition_address: ComponentAddress, owner_badge: Proof) -> Global<LeveragedFarmingV1Factory> {
+    impl YieldMultiplierV1 {
+        pub fn instantiate(dapp_definition_address: ComponentAddress, owner_badge: Proof) -> Global<YieldMultiplierV1> {
             // Reserve address
-            let (address_reservation, component_address) = Runtime::allocate_component_address(LeveragedFarmingV1Factory::blueprint_id());
+            let (address_reservation, component_address) = Runtime::allocate_component_address(YieldMultiplierV1::blueprint_id());
 
             //] Authorisation
             // Component
@@ -41,8 +41,8 @@ mod leveraged_farming_v1_factory {
                     metadata_locker_updater => rule!(deny_all);
                 },
                 init {
-                    "name"            => "L3//Factory - Leveraged Yield Farming v0.1", locked;
-                    "description"     => "Lattic3 factory component for the 'Leveraged Yield Farming V1' strategy.", locked;
+                    "name"            => "L3//Cluster - Yield Multiplier v1", locked;
+                    "description"     => "Lattic3 cluster component for the 'Yield Multiplier v1' strategy.", locked;
                     "dapp_definition" => dapp_definition_address, updatable;
                 }
             };
@@ -51,7 +51,7 @@ mod leveraged_farming_v1_factory {
             // let component_roles = roles! {};
 
             // Instantisation
-            let component: Global<LeveragedFarmingV1Factory> = Self {}
+            let component: Global<YieldMultiplierV1> = Self {}
                 .instantiate()
                 .prepare_to_globalize(owner_role)
                 // .roles(component_roles)
