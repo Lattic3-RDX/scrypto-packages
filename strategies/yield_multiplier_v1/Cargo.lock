@@ -600,14 +600,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "884e2677b40cc8c339eaefcb701c32ef1fd2493d71118dc0ca4b6a736c93bd67"
 
 [[package]]
-name = "leveraged_farming_v1"
-version = "1.0.0"
-dependencies = [
- "scrypto",
- "scrypto-test",
-]
-
-[[package]]
 name = "libc"
 version = "0.2.158"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1992,6 +1984,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f593a95398737aeed53e489c785df13f3618e41dbcd6718c6addbf1395aa6876"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "yield_multiplier_v1"
+version = "1.0.0"
+dependencies = [
+ "scrypto",
+ "scrypto-test",
 ]
 
 [[package]]
