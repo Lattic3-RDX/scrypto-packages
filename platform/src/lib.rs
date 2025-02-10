@@ -7,7 +7,7 @@ use strategies::VerifiedStrategy;
 
 /* ----------------- Blueprint ---------------- */
 #[blueprint]
-mod central_platform {
+mod platform {
     //] --------------- Scrypto Setup -------------- /
     enable_method_auth! {
     //     roles {

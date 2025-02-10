@@ -1,5 +1,5 @@
 /* ------------------ Imports ----------------- */
-use central_platform::central_platform_test::*;
+use platform::platform_test::*;
 use scrypto_test::prelude::*;
 
 /* ------------------- Tests ------------------ */
