@@ -30,7 +30,7 @@ mod yield_multiplier_weft_v2_cluster {
 
     //] ------------- Cluster Blueprint ------------ /
 
-    struct YieldMultiplierV1Cluster {
+    struct YieldMultiplierV1ClusterWeftV2 {
         // Authorisation
         owner_badge_res: ResourceAddress,           // Resource address of the owner badge
         parent_platform: ComponentAddress, // Component address of the central platform. Must match the one defined in the verification badge.
@@ -47,7 +47,7 @@ mod yield_multiplier_weft_v2_cluster {
         fee_vault: FungibleVault, // Collects fees in `supply_res`
     }
 
-    impl YieldMultiplierV1Cluster {
+    impl YieldMultiplierV1ClusterWeftV2 {
         pub fn instantiate(
             // Metadata
             dapp_definition_address: ComponentAddress,
@@ -59,9 +59,9 @@ mod yield_multiplier_weft_v2_cluster {
             supply_res: ResourceAddress,
             debt_res: ResourceAddress,
             position_res: ResourceAddress,
-        ) -> Global<YieldMultiplierV1Cluster> {
+        ) -> Global<YieldMultiplierV1ClusterWeftV2> {
             // Reserve component address
-            let (address_reservation, component_address) = Runtime::allocate_component_address(YieldMultiplierV1Cluster::blueprint_id());
+            let (address_reservation, component_address) = Runtime::allocate_component_address(YieldMultiplierV1ClusterWeftV2::blueprint_id());
 
             //] Authorisation
             // Component
@@ -117,7 +117,7 @@ mod yield_multiplier_weft_v2_cluster {
                 fee_vault: FungibleVault::new(supply_res),
             };
 
-            let component: Global<YieldMultiplierV1Cluster> = initial_state
+            let component: Global<YieldMultiplierV1ClusterWeftV2> = initial_state
                 .instantiate()
                 .prepare_to_globalize(owner_role)
                 .roles(component_roles)
