@@ -1,9 +1,9 @@
 /* ------------------ Imports ----------------- */
 use scrypto::prelude::*;
-use shared::operating_services::{OperatingServiceManager, ServiceValue};
+use shared::services::ServiceValue;
 
 /* ------------ Operating Services ------------ */
-#[derive(ScryptoSbor, Debug, Clone)]
+#[derive(ScryptoSbor, Debug, Clone, Copy)]
 pub enum ClusterService {
     UpdateBadge,
 }
@@ -13,12 +13,12 @@ pub struct ClusterServiceManager {
     pub can_update_badge: ServiceValue,
 }
 
-impl OperatingServiceManager for ClusterServiceManager {
-    fn new() -> Self {
+impl ClusterServiceManager {
+    pub fn new() -> Self {
         Self { can_update_badge: ServiceValue { value: true } }
     }
 
-    fn update_service(&mut self, service: ClusterService, value: bool) -> Result<(), String> {
+    pub fn update_service(&mut self, service: ClusterService, value: bool) -> Result<(), String> {
         match service {
             ClusterService::UpdateBadge => self.can_update_badge.value = value,
         };
@@ -26,7 +26,7 @@ impl OperatingServiceManager for ClusterServiceManager {
         Ok(())
     }
 
-    fn get_service(&self, service: ClusterService) -> ServiceValue {
+    pub fn get_service(&self, service: ClusterService) -> ServiceValue {
         match service {
             ClusterService::UpdateBadge => self.can_update_badge,
         }

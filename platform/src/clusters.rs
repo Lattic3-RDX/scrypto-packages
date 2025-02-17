@@ -1,5 +1,5 @@
 /* ------------------ Imports ----------------- */
-use crate::operating_services::cluster_services::ClusterServiceManager;
+use crate::services::cluster_services::ClusterServiceManager;
 use scrypto::prelude::*;
 
 /* -------------- Cluster Wrapper ------------- */
@@ -17,7 +17,7 @@ impl ClusterWrapper {
             cluster_address,
             package_address,
             link_id,
-            services: ClusterServiceManager { can_update_badge: false },
+            services: ClusterServiceManager::new(),
         }
     }
 

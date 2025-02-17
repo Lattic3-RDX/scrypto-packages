@@ -1,6 +1,6 @@
 /* ------------------ Imports ----------------- */
 use crate::clusters::ClusterWrapper;
-use crate::operating_services::cluster_services::ClusterService;
+use crate::services::cluster_services::ClusterService;
 use scrypto::prelude::*;
 use shared::links::Link;
 
