@@ -20,3 +20,11 @@ fn simple_package_can_be_published() -> Result<(), RuntimeError> {
 
     Ok(())
 }
+
+#[test]
+
+fn test_platform_instantiates() {}
+
+#[test]
+
+fn test_yield_multiplier_weft_cluster_instantiates() {}
