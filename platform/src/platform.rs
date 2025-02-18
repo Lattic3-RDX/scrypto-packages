@@ -1,20 +1,24 @@
 /* ------------------ Imports ----------------- */
 use crate::clusters::ClusterWrapper;
 use crate::services::cluster_services::ClusterService;
+use crate::users::User;
 use scrypto::prelude::*;
 use shared::links::Link;
 
 /* ----------------- Blueprint ---------------- */
 #[blueprint]
 mod platform {
+
     struct Platform {
         // Authorisation
         component_address: ComponentAddress,
+        // User badges
+        user_badge_manager: NonFungibleResourceManager,
+        user_count: u64,
         // Links
         link_badge_manager: NonFungibleResourceManager,
         linked_clusters: KeyValueStore<ComponentAddress, ClusterWrapper>,
         linked_count: u64,
-        unused_linked_ids: IndexSet<u64>,
     }
 
     impl Platform {
@@ -44,6 +48,27 @@ mod platform {
                 .mint_initial_supply(1);
             let owner_access_rule: AccessRule = rule!(require(owner_badge.resource_address()));
             let owner_role: OwnerRole = OwnerRole::Fixed(owner_access_rule.clone());
+
+            //] User badges
+            let user_badge_manager: NonFungibleResourceManager = ResourceBuilder::new_integer_non_fungible::<User>(owner_role.clone())
+                .metadata(metadata! {init {
+                    "name"            => "L3//User Badge", locked;
+                    "description"     => "Badge used to denote a user's ownership over accounts in Lattic3 clusters.", locked;
+                    // "dapp_definition" => dapp_definition_address, updatable;
+                }})
+                .non_fungible_data_update_roles(non_fungible_data_update_roles! {
+                    non_fungible_data_updater         => component_access_rule.clone();
+                    non_fungible_data_updater_updater => rule!(deny_all);
+                })
+                .mint_roles(mint_roles! {
+                    minter         => component_access_rule.clone();
+                    minter_updater => rule!(deny_all);
+                })
+                .burn_roles(burn_roles! {
+                    burner         => component_access_rule.clone();
+                    burner_updater => rule!(deny_all);
+                })
+                .create_with_no_initial_supply();
 
             //] Links
             let link_badge_manager: NonFungibleResourceManager = ResourceBuilder::new_integer_non_fungible::<Link>(owner_role.clone())
@@ -95,11 +120,13 @@ mod platform {
             let initial_state = Self {
                 // Authorisation
                 component_address,
+                // User badges
+                user_badge_manager,
+                user_count: 0,
                 // Links
                 link_badge_manager,
                 linked_clusters: KeyValueStore::new(),
                 linked_count: 0,
-                unused_linked_ids: IndexSet::new(),
             };
 
             let component: Global<Self> = initial_state
@@ -113,12 +140,35 @@ mod platform {
             (component, owner_badge)
         }
 
+        //] ---------------- User Badge ---------------- */
+        pub fn new_user(&mut self) -> Result<NonFungibleBucket, String> {
+            // Ensure that a new user badge can be minted
+            if self.user_count == u64::MAX {
+                return Err("Cannot mint more user badges; at U64 MAX".to_string());
+            }
+
+            // Create empty user badge
+            let badge_data: User = User::new();
+            let badge_id = NonFungibleLocalId::Integer(self.user_count.into());
+            let badge = self.user_badge_manager.mint_non_fungible(&badge_id, badge_data);
+
+            // Increment user badge count
+            self.user_count += 1;
+
+            Ok(badge)
+        }
+
         //] ------------------- Links ------------------ */
         // RESTRICT can_link/component
         pub fn link_cluster(&mut self, cluster_address: ComponentAddress, package_address: PackageAddress) -> Result<(), String> {
             // Ensure that the cluster hasn't already been linked
             if self.linked_clusters.get(&cluster_address).is_some() {
                 return Err("Cluster already linked".to_string());
+            }
+
+            // Ensure that a new link badge can be minted
+            if self.linked_count == u64::MAX {
+                return Err("Cannot link more clusters; at U64 MAX".to_string());
             }
 
             // Create link badge
@@ -140,12 +190,7 @@ mod platform {
 
         // RESTRICT can_link/component
         pub fn unlink_cluster(&mut self, cluster_address: ComponentAddress) -> Result<(), String> {
-            // Sanity checks
-            if self.linked_clusters.get(&cluster_address).is_none() {
-                return Err("Cluster already linked".to_string());
-            }
-
-            let wrapper = self.linked_clusters.get(&cluster_address).unwrap();
+            let _wrapper = self.linked_clusters.get(&cluster_address).ok_or("Cluster already linked".to_string())?;
 
             self.linked_clusters.remove(&cluster_address);
 
