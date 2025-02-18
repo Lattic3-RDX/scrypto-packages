@@ -1,28 +1,16 @@
 /* ------------------ Imports ----------------- */
-use crate::integration::*;
+use crate::weft::*;
 use scrypto::prelude::*;
 
 /* ----------------- Blueprint ---------------- */
 #[blueprint]
 mod yield_multiplier_weft_v2_cluster {
     //] --------------- Scrypto Setup -------------- /
-    // enable_method_auth! {
-    //     roles {
-    //         platform => updatable_by: [OWNER];
-    //     },
-    //     methods {
-    //         // Platform
-    //         get_parent_platform => PUBLIC;
-    //         add_verification    => restrict_to: [SELF, OWNER];
-    //         // Positions
-    //         add_unused_position => PUBLIC;
-    //     }
-    // }
 
     //] ------------- Cluster Blueprint ------------ /
 
     struct YieldMultiplierV1ClusterWeftV2 {
-        links: KeyValueStore<ComponentAddress, Vault>,
+        links: KeyValueStore<ComponentAddress, NonFungibleVault>,
     }
 
     impl YieldMultiplierV1ClusterWeftV2 {
@@ -71,7 +59,7 @@ mod yield_multiplier_weft_v2_cluster {
             // };
 
             // Instantisation
-            let initial_state = Self {};
+            let initial_state = Self { links: KeyValueStore::new() };
 
             let component: Global<YieldMultiplierV1ClusterWeftV2> = initial_state
                 .instantiate()
@@ -85,23 +73,16 @@ mod yield_multiplier_weft_v2_cluster {
         }
 
         //] ----------------- Platform ----------------- */
-        pub fn handle_link(&mut self, bucket: NonFungibleBucket) -> Result<(), String> {
-            // Ensure that the platform hasn't already been linked
-            if self.links.get(&cluster_address).is_some() {
-                return Err("Platform already linked".to_string());
-            }
+        pub fn handle_link(&mut self, platform: ComponentAddress, bucket: NonFungibleBucket) {
+            // Sanity checks
+            assert!(self.links.get(&platform).is_none(), "Platform already linked");
+            assert_eq!(bucket.amount(), dec!(1), "Invalid bucket amount; must contain 1 link badge");
 
-            // Only allow a single badge to be linked
-            if bucket.amount() != 1 {
-                return Err("One badge has to be linked".to_string());
-            }
-
-            self.links.insert(cluster_address, Vault::from(bucket));
-
-            Ok(())
+            // Link platform
+            let vault = NonFungibleVault::with_bucket(bucket);
+            self.links.insert(platform, vault);
         }
 
-        //] ----------------- Positions ---------------- */
-        pub fn add_unused_position(&mut self, position: NonFungibleBucket) {}
+        //] ----------------- Accounts ----------------- */
     }
 }

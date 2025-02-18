@@ -141,11 +141,9 @@ mod platform {
         }
 
         //] ---------------- User Badge ---------------- */
-        pub fn new_user(&mut self) -> Result<NonFungibleBucket, String> {
+        pub fn new_user(&mut self) -> NonFungibleBucket {
             // Ensure that a new user badge can be minted
-            if self.user_count == u64::MAX {
-                return Err("Cannot mint more user badges; at U64 MAX".to_string());
-            }
+            assert!(self.user_count < u64::MAX, "Cannot mint more user badges; at U64 MAX");
 
             // Create empty user badge
             let badge_data: User = User::new();
@@ -155,21 +153,17 @@ mod platform {
             // Increment user badge count
             self.user_count += 1;
 
-            Ok(badge)
+            badge
         }
 
         //] ------------------- Links ------------------ */
         // RESTRICT can_link/component
-        pub fn link_cluster(&mut self, cluster_address: ComponentAddress, package_address: PackageAddress) -> Result<(), String> {
+        pub fn link_cluster(&mut self, cluster_address: ComponentAddress, package_address: PackageAddress) {
             // Ensure that the cluster hasn't already been linked
-            if self.linked_clusters.get(&cluster_address).is_some() {
-                return Err("Cluster already linked".to_string());
-            }
+            assert!(self.linked_clusters.get(&cluster_address).is_none(), "Cluster already linked");
 
             // Ensure that a new link badge can be minted
-            if self.linked_count == u64::MAX {
-                return Err("Cannot link more clusters; at U64 MAX".to_string());
-            }
+            assert!(self.linked_count < u64::MAX, "Cannot link more clusters; at U64 MAX");
 
             // Create link badge
             let link_data = Link::new(self.component_address, cluster_address);
@@ -182,31 +176,27 @@ mod platform {
             let wrapper = ClusterWrapper::new(cluster_address, package_address, Some(link_id));
 
             // Deposit badge into cluster and insert into KV
-            wrapper.call::<Result<(), String>>("handle_link", scrypto_args!(link_badge))?;
+            wrapper.call::<()>("handle_link", scrypto_args!(link_badge));
             self.linked_clusters.insert(cluster_address, wrapper);
-
-            Ok(())
         }
 
         // RESTRICT can_link/component
-        pub fn unlink_cluster(&mut self, cluster_address: ComponentAddress) -> Result<(), String> {
-            let _wrapper = self.linked_clusters.get(&cluster_address).ok_or("Cluster already linked".to_string())?;
+        pub fn unlink_cluster(&mut self, cluster_address: ComponentAddress) {
+            let _wrapper = self.linked_clusters.get(&cluster_address).ok_or("Cluster already linked".to_string());
 
             self.linked_clusters.remove(&cluster_address);
-
-            Ok(())
         }
 
-        pub fn update_cluster_service(&mut self, cluster_address: ComponentAddress, service: ClusterService, value: bool) -> Result<(), String> {
+        pub fn update_cluster_service(&mut self, cluster_address: ComponentAddress, service: ClusterService, value: bool) {
             let mut wrapper = self
                 .linked_clusters
                 .get_mut(&cluster_address)
-                .ok_or("Cluster with given address not linked".to_string())?;
-            wrapper.services.update_service(service, value)
+                .expect("Cluster with given address not linked");
+            wrapper.services.update_service(service, value);
         }
 
         // PUBLIC
-        pub fn validate_link_proof(&self) -> bool {
+        pub fn authorise_operation(&self) -> bool {
             true
         }
     }

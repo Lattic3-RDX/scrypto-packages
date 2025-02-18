@@ -18,12 +18,10 @@ impl ClusterServiceManager {
         Self { can_update_badge: ServiceValue { value: true } }
     }
 
-    pub fn update_service(&mut self, service: ClusterService, value: bool) -> Result<(), String> {
+    pub fn update_service(&mut self, service: ClusterService, value: bool) {
         match service {
             ClusterService::UpdateBadge => self.can_update_badge.value = value,
         };
-
-        Ok(())
     }
 
     pub fn get_service(&self, service: ClusterService) -> ServiceValue {
