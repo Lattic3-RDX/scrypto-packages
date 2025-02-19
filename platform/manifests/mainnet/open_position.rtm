@@ -22,6 +22,20 @@ CALL_METHOD
 # Collect all xUSDC into a bucket
 TAKE_ALL_FROM_WORKTOP
     Address("resource_rdx1t4upr78guuapv5ept7d7ptekk9mqhy605zgms33mcszen8l9fac8vf")
+    Bucket("raw_supply")
+;
+
+# Convert xUSDC into w2_xUSDC
+CALL_METHOD
+    Address("component_rdx1czmr02yl4da709ceftnm9dnmag7rthu0tu78wmtsn5us9j02d9d0xn")
+    "deposit"
+    Array<Bucket>(
+        Bucket("raw_supply")
+    )
+;
+
+TAKE_ALL_FROM_WORKTOP
+    Address("resource_rdx1thw2u4uss739j8cqumehgf5wyw26chcfu98newsu42zhln7wd050ee")
     Bucket("supply")
 ;
 
@@ -59,7 +73,7 @@ CALL_METHOD
 TAKE_NON_FUNGIBLES_FROM_WORKTOP
     Address("resource_rdx1nt22yfvhuuhxww7jnnml5ec3yt5pkxh0qlghm6f0hz46z2wfk80s9r")
     Array<NonFungibleLocalId>(
-        NonFungibleLocalId("#218#"),
+        NonFungibleLocalId("#219#"),
     )
     Bucket("cdp")
 ;

@@ -1,0 +1,148 @@
+# ------------------- Weft ------------------- #
+
+# Take flash loan for repayment
+CALL_METHOD
+    Address("component_rdx1czmr02yl4da709ceftnm9dnmag7rthu0tu78wmtsn5us9j02d9d0xn")
+    "take_flash_loan"
+    Map<Address, Decimal>(
+        Address("resource_rdx1t580qxc7upat7lww4l2c4jckacafjeudxj5wpjrrct0p3e82sq4y75") => Decimal("0.00000224")
+    )
+;
+
+# Collect all xwBTC into a bucket
+TAKE_ALL_FROM_WORKTOP
+    Address("resource_rdx1t580qxc7upat7lww4l2c4jckacafjeudxj5wpjrrct0p3e82sq4y75")
+    Bucket("repayment")
+;
+
+# Create proof for repayment
+CALL_METHOD
+    Address("account_rdx12y4jmlyavnm3fkdc2ckuxpslnvt07cy8txmnyglve855q7m0akjtqp") 
+    "create_proof_of_non_fungibles" 
+    Address("resource_rdx1nt22yfvhuuhxww7jnnml5ec3yt5pkxh0qlghm6f0hz46z2wfk80s9r") 
+    Array<NonFungibleLocalId>(
+        NonFungibleLocalId("#218#")
+    )
+;
+
+POP_FROM_AUTH_ZONE Proof("cdp_1");
+CLONE_PROOF
+    Proof("cdp_1")
+    Proof("cdp_2")
+;
+
+# Repay
+CALL_METHOD
+    Address("component_rdx1cpy6putj5p7937clqgcgutza7k53zpha039n9u5hkk0ahh4stdmq4w") 
+    "cdp_batch_operation" 
+    Proof("cdp_1") 
+    Array<Bucket>()
+    Array<Bucket>()
+    Map<Address, Decimal>()
+    Array<Bucket>(
+        Bucket("repayment")
+        )
+    Map<Address, Decimal>()
+    Map<Address, Array>()
+;
+
+# Withdraw
+CALL_METHOD Address("component_rdx1cpy6putj5p7937clqgcgutza7k53zpha039n9u5hkk0ahh4stdmq4w") 
+    "cdp_batch_operation" 
+    Proof("cdp_2") 
+    Array<Bucket>() 
+    Array<Bucket>()
+    Map<Address,Decimal>() 
+    Array<Bucket>() 
+    Map<Address, Decimal>(
+        Address("resource_rdx1t4upr78guuapv5ept7d7ptekk9mqhy605zgms33mcszen8l9fac8vf") => Decimal("0.4")
+    )
+    Map<Address, Array>()
+;
+
+# ------------------ OciSwap ----------------- #
+
+# Collect all xUSDC on worktop
+TAKE_ALL_FROM_WORKTOP
+    Address("resource_rdx1t4upr78guuapv5ept7d7ptekk9mqhy605zgms33mcszen8l9fac8vf")
+    Bucket("input_bucket_0")
+;
+
+CALL_METHOD
+    Address("component_rdx1cq76gg42k73e9y7fcpy2q6d83nr703fa3xztc7lz5dnw38xkp2l5pt")
+    "swap"
+    Bucket("input_bucket_0")
+;
+
+# Swap XRD to xwBTC
+TAKE_ALL_FROM_WORKTOP
+    Address("resource_rdx1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxradxrd")
+    Bucket("input_bucket_1")
+;
+CALL_METHOD
+    Address("component_rdx1cpcd3wxrwgtldnrtkz995dzj6zhsqg2sym9tpqgmg7g9wsuu00jn65")
+    "swap"
+    Bucket("input_bucket_1")
+;
+
+# Ensure sufficient xwBTC to repay loan
+ASSERT_WORKTOP_CONTAINS
+    Address("resource_rdx1t580qxc7upat7lww4l2c4jckacafjeudxj5wpjrrct0p3e82sq4y75")
+    Decimal("0.00000224")
+;
+
+# ------------------- Weft ------------------- #
+
+# Collect all swapped xwBTC
+TAKE_ALL_FROM_WORKTOP
+    Address("resource_rdx1t580qxc7upat7lww4l2c4jckacafjeudxj5wpjrrct0p3e82sq4y75")
+    Bucket("loan_repayment")
+;
+
+# Take loan terms
+TAKE_ALL_FROM_WORKTOP
+    Address("resource_rdx1nfeyk5cmjep98zae9vhg067elm2necwsvdnngp3je62ahqstsa8x2x")
+    Bucket("loan_terms")
+;
+
+# Repay flash loan
+CALL_METHOD
+    Address("component_rdx1czmr02yl4da709ceftnm9dnmag7rthu0tu78wmtsn5us9j02d9d0xn")
+    "repay_flash_loan"
+    Array<Bucket>(
+        Bucket("loan_repayment")
+    )
+    Bucket("loan_terms")
+;
+
+# ------------------ OciSwap ----------------- #
+
+# Swap xwBTC to XRD
+TAKE_ALL_FROM_WORKTOP
+    Address("resource_rdx1t580qxc7upat7lww4l2c4jckacafjeudxj5wpjrrct0p3e82sq4y75")
+    Bucket("input_bucket_2")
+;
+CALL_METHOD
+    Address("component_rdx1cpcd3wxrwgtldnrtkz995dzj6zhsqg2sym9tpqgmg7g9wsuu00jn65")
+    "swap"
+    Bucket("input_bucket_2")
+;
+
+# Swap XRD to xUSDC
+TAKE_ALL_FROM_WORKTOP
+    Address("resource_rdx1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxradxrd")
+    Bucket("input_bucket_3")
+;
+CALL_METHOD
+    Address("component_rdx1cq76gg42k73e9y7fcpy2q6d83nr703fa3xztc7lz5dnw38xkp2l5pt")
+    "swap"
+    Bucket("input_bucket_3")
+;
+
+# ------------------- User ------------------- #
+
+CALL_METHOD 
+    Address("account_rdx12y4jmlyavnm3fkdc2ckuxpslnvt07cy8txmnyglve855q7m0akjtqp") 
+    "deposit_batch"
+    Expression("ENTIRE_WORKTOP")
+;
