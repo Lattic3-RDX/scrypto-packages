@@ -1,5 +1,5 @@
 /* ------------------ Imports ----------------- */
-use crate::weft::*;
+use crate::weft::CDPData;
 use scrypto::prelude::*;
 
 /* ----------------- Blueprint ---------------- */
@@ -9,12 +9,32 @@ mod yield_multiplier_weft_v2_cluster {
 
     //] ------------- Cluster Blueprint ------------ /
 
+    use std::panic::catch_unwind;
+
     struct YieldMultiplierV1ClusterWeftV2 {
+        // Authorisation
+        component_address: ComponentAddress,
+        owner_address: ResourceAddress,
+        // Links
         links: KeyValueStore<ComponentAddress, NonFungibleVault>,
+        // Cluster
+        supply: ResourceAddress,
+        debt: ResourceAddress,
+        accounts: KeyValueStore<NonFungibleLocalId, ()>,
+        // Integration
+        cdp_manager: NonFungibleResourceManager,
     }
 
     impl YieldMultiplierV1ClusterWeftV2 {
-        pub fn instantiate() -> (Global<YieldMultiplierV1ClusterWeftV2>, Bucket) {
+        pub fn instantiate(
+            // Authorisation
+            owner_proof: FungibleProof,
+            // Cluster
+            supply: ResourceAddress,
+            debt: ResourceAddress,
+            // Integration
+            cdp_resource: ResourceAddress,
+        ) -> Global<YieldMultiplierV1ClusterWeftV2> {
             // Reserve component address
             let (address_reservation, component_address) = Runtime::allocate_component_address(YieldMultiplierV1ClusterWeftV2::blueprint_id());
 
@@ -26,15 +46,8 @@ mod yield_multiplier_weft_v2_cluster {
             // let platform_access_rule: AccessRule = rule!(require(global_caller(parent_platform)));
 
             // Component owner
-            let owner_badge: Bucket = ResourceBuilder::new_fungible(OwnerRole::None)
-                .divisibility(DIVISIBILITY_NONE)
-                .metadata(metadata! {init {
-                    "name"        => "Lattic3 Owner Badge", locked;
-                    "description" => "Badge representing the owner of the Lattic3 lending platform", locked;
-                }})
-                .mint_initial_supply(1)
-                .into();
-            let owner_access_rule: AccessRule = rule!(require(owner_badge.resource_address()));
+            let owner_address = owner_proof.resource_address();
+            let owner_access_rule: AccessRule = rule!(require(owner_address));
             let owner_role: OwnerRole = OwnerRole::Fixed(owner_access_rule.clone());
 
             //] Component Instantisation
@@ -59,7 +72,15 @@ mod yield_multiplier_weft_v2_cluster {
             // };
 
             // Instantisation
-            let initial_state = Self { links: KeyValueStore::new() };
+            let initial_state = Self {
+                component_address,
+                owner_address,
+                links: KeyValueStore::new(),
+                supply,
+                debt,
+                accounts: KeyValueStore::new(),
+                cdp_manager: cdp_resource.into(),
+            };
 
             let component: Global<YieldMultiplierV1ClusterWeftV2> = initial_state
                 .instantiate()
@@ -69,10 +90,10 @@ mod yield_multiplier_weft_v2_cluster {
                 .with_address(address_reservation)
                 .globalize();
 
-            (component, owner_badge)
+            component
         }
 
-        //] ----------------- Platform ----------------- */
+        //] ------------------- Links ------------------ */
         pub fn handle_link(&mut self, platform: ComponentAddress, bucket: NonFungibleBucket) {
             // Sanity checks
             assert!(self.links.get(&platform).is_none(), "Platform already linked");
@@ -84,5 +105,57 @@ mod yield_multiplier_weft_v2_cluster {
         }
 
         //] ----------------- Accounts ----------------- */
+        //] ------------------- Weft ------------------- */
+        pub fn validate_cdp(&self, local_id: NonFungibleLocalId) -> bool {
+            // Parse CDP data or return false if fetching the data panics
+            // Panic occurs if the cdp_manager cannot find an NFT with a matching local_id
+            let cdp: CDPData = match catch_unwind(|| self.cdp_manager.get_non_fungible_data::<CDPData>(&local_id)) {
+                Ok(cdp) => cdp,
+                Err(_) => {
+                    info!("Error parsing CDP with local_id {:?}", local_id);
+                    return false;
+                }
+            };
+
+            // Validate supply & debt amounts
+            if cdp.collaterals.len() > 1 {
+                info!("CDP with local_id {:?} has more than one collateral", local_id);
+                return false;
+            }
+
+            if cdp.loans.len() > 1 {
+                info!("CDP with local_id {:?} has more than one loan", local_id);
+                return false;
+            }
+
+            // Validate that there are no NFT collaterals
+            if cdp.nft_collaterals.len() != 0 {
+                info!("CDP with local_id {:?} has NFT collateral(s)", local_id);
+                return false;
+            }
+
+            //? Check for (unlikely) invalid CDP states
+            // if cdp.loans.len() == 1 && cdp.collaterals.len() == 0 {
+            //     info!("Invalid CDP state: 1 loan, 0 collateral");
+            //     return false;
+            // }
+
+            // Validate that all supply and debt assets are valid
+            for (&resource, _) in cdp.collaterals.iter() {
+                if resource != self.supply {
+                    info!("CDP with local_id {:?} has an invalid supply asset", local_id);
+                    return false;
+                }
+            }
+
+            for (&resource, _) in cdp.loans.iter() {
+                if resource != self.debt {
+                    info!("CDP with local_id {:?} has an invalid debt asset", local_id);
+                    return false;
+                }
+            }
+
+            true
+        }
     }
 }
