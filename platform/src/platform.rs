@@ -8,7 +8,24 @@ use shared::links::Link;
 /* ----------------- Blueprint ---------------- */
 #[blueprint]
 mod platform {
+    //] --------------- Scrypto Setup -------------- */
+    enable_method_auth! {
+        roles {
+            can_manage_links => updatable_by: [OWNER];
+        },
+        methods {
+            // User
+            new_user      => PUBLIC;
+            open_account  => PUBLIC; // Restricted by link badge
+            close_account => PUBLIC; // Restricted by link badge
+            // Links
+            link_cluster   => restrict_to: [can_manage_links, OWNER, SELF];
+            unlink_cluster => restrict_to: [can_manage_links, OWNER, SELF];
+            update_cluster_service => restrict_to: [can_manage_links, OWNER, SELF];
+        }
+    }
 
+    //] ------------ Platform Blueprint ------------ */
     struct Platform {
         // Authorisation
         component_address: ComponentAddress,
@@ -112,9 +129,9 @@ mod platform {
             };
 
             // Roles
-            // let component_roles = roles! {
-            //     platform => platform_access_rule.clone();
-            // };
+            let component_roles = roles! {
+                can_manage_links => OWNER;
+            };
 
             // Instantisation
             let initial_state = Self {
@@ -132,7 +149,7 @@ mod platform {
             let component: Global<Self> = initial_state
                 .instantiate()
                 .prepare_to_globalize(owner_role)
-                // .roles(component_roles)
+                .roles(component_roles)
                 .metadata(component_metadata)
                 .with_address(address_reservation)
                 .globalize();
@@ -140,8 +157,10 @@ mod platform {
             (component, owner_badge)
         }
 
-        //] ---------------- User Badge ---------------- */
+        //] ------------------- User ------------------- */
         pub fn new_user(&mut self) -> NonFungibleBucket {
+            // TODO: integrate own service
+
             // Ensure that a new user badge can be minted
             assert!(self.user_count < u64::MAX, "Cannot mint more user badges; at U64 MAX");
 
@@ -156,8 +175,48 @@ mod platform {
             badge
         }
 
-        pub fn get_user_badge_address(&self) -> ResourceAddress {
-            self.user_badge_manager.address()
+        pub fn open_account(&self, link_badge: NonFungibleProof, user_badge: NonFungibleProof) {
+            // TODO: integrate own service
+
+            // Validate the link
+            let wrapper = self.__validate_link(link_badge);
+            let can_update_badge = wrapper.services.get_service(ClusterService::UpdateBadge).value;
+            assert_eq!(can_update_badge, true, "ClusterService::UpdateBadge disabled");
+
+            // Validate the user badge
+            let valid_user = user_badge.check_with_message(self.user_badge_manager.address(), "User badge not valid");
+            assert_eq!(valid_user.amount(), dec!(1), "Invalid user badge quantity");
+
+            // Open account and update badge
+            let local_id = &valid_user.non_fungible_local_id();
+            let mut user: User = valid_user.non_fungible().data();
+            user.add_account(wrapper.cluster_address);
+
+            self.user_badge_manager
+                .update_non_fungible_data(local_id, "accounts_in", user.accounts_in);
+            self.user_badge_manager.update_non_fungible_data(local_id, "open", user.open);
+        }
+
+        pub fn close_account(&self, link_badge: NonFungibleProof, user_badge: NonFungibleProof) {
+            // TODO: integrate own service
+
+            // Validate the link
+            let wrapper = self.__validate_link(link_badge);
+            let can_update_badge = wrapper.services.get_service(ClusterService::UpdateBadge).value;
+            assert_eq!(can_update_badge, true, "ClusterService::UpdateBadge disabled");
+
+            // Validate the user badge
+            let valid_user = user_badge.check_with_message(self.user_badge_manager.address(), "User badge not valid");
+            assert_eq!(valid_user.amount(), dec!(1), "Invalid user badge quantity");
+
+            // Open account and update badge
+            let local_id = &valid_user.non_fungible_local_id();
+            let mut user: User = valid_user.non_fungible().data();
+            user.remove_account(wrapper.cluster_address);
+
+            self.user_badge_manager
+                .update_non_fungible_data(local_id, "accounts_in", user.accounts_in);
+            self.user_badge_manager.update_non_fungible_data(local_id, "open", user.open);
         }
 
         //] ------------------- Links ------------------ */
@@ -177,14 +236,13 @@ mod platform {
             self.linked_count += 1;
 
             // Create ClusterWrapper
-            let wrapper = ClusterWrapper::new(cluster_address, package_address, Some(link_id));
+            let wrapper = ClusterWrapper::new(cluster_address, package_address, link_id);
 
             // Deposit badge into cluster and insert into KV
             wrapper.call::<()>("handle_link", scrypto_args!(link_badge));
             self.linked_clusters.insert(cluster_address, wrapper);
         }
 
-        // RESTRICT can_link/component
         pub fn unlink_cluster(&mut self, cluster_address: ComponentAddress) {
             let _wrapper = self.linked_clusters.get(&cluster_address).ok_or("Cluster already linked".to_string());
 
@@ -199,9 +257,22 @@ mod platform {
             wrapper.services.update_service(service, value);
         }
 
-        // PUBLIC
-        pub fn authorise_operation(&self) -> bool {
-            true
+        //] Private
+        fn __validate_link(&self, link_badge: NonFungibleProof) -> ClusterWrapper {
+            // Validate the proof
+            let valid_link = link_badge.check_with_message(self.link_badge_manager.address(), "Link badge not valid");
+            assert_eq!(valid_link.amount(), dec!(1), "Invalid link badge quantity");
+
+            // Deconstruct the link badge
+            let link: Link = valid_link.non_fungible().data();
+            let cluster_address = link.linked_cluster;
+            let wrapper = self.linked_clusters.get(&cluster_address).expect("Cluster not linked");
+
+            // Validate the link
+            assert_eq!(link.issuing_platform, self.component_address, "Link badge not issued by this platform");
+
+            // Return the ClusterWrapper
+            wrapper.clone()
         }
     }
 }

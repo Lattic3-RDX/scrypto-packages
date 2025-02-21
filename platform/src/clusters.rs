@@ -7,12 +7,12 @@ use scrypto::prelude::*;
 pub struct ClusterWrapper {
     pub cluster_address: ComponentAddress,
     pub package_address: PackageAddress,
-    pub link_id: Option<NonFungibleLocalId>,
+    pub link_id: NonFungibleLocalId,
     pub services: ClusterServiceManager,
 }
 
 impl ClusterWrapper {
-    pub fn new(cluster_address: ComponentAddress, package_address: PackageAddress, link_id: Option<NonFungibleLocalId>) -> Self {
+    pub fn new(cluster_address: ComponentAddress, package_address: PackageAddress, link_id: NonFungibleLocalId) -> Self {
         Self {
             cluster_address,
             package_address,

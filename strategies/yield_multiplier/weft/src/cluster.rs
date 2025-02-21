@@ -7,10 +7,8 @@ use std::panic::catch_unwind;
 /* ----------------- Blueprint ---------------- */
 #[blueprint]
 mod yield_multiplier_weft_v2_cluster {
-    //] --------------- Scrypto Setup -------------- /
-
-    //] ------------- Cluster Blueprint ------------ /
-
+    //] --------------- Scrypto Setup -------------- */
+    //] ------------- Cluster Blueprint ------------ */
     struct YieldMultiplierV1ClusterWeftV2 {
         // Authorisation
         component_address: ComponentAddress,
@@ -32,6 +30,10 @@ mod yield_multiplier_weft_v2_cluster {
         pub fn instantiate(
             // Authorisation
             owner_proof: FungibleProof,
+            // Link
+            platform_address: ComponentAddress,
+            link_resource: ResourceAddress,
+            user_badge_address: ResourceAddress,
             // Cluster
             supply: ResourceAddress,
             debt: ResourceAddress,
@@ -95,7 +97,9 @@ mod yield_multiplier_weft_v2_cluster {
             let initial_state = Self {
                 component_address,
                 owner_address,
-                links: KeyValueStore::new(),
+                platform_address,
+                link: NonFungibleVault::new(link_resource),
+                user_badge_address,
                 supply,
                 debt,
                 accounts: KeyValueStore::new(),
@@ -132,13 +136,25 @@ mod yield_multiplier_weft_v2_cluster {
         //] Private
 
         //] ------------------ Cluster ----------------- */
-        pub fn add_account(&mut self, user_badge: NonFungibleProof, cdp: NonFungibleBucket) {
+        pub fn open_account(&mut self, user_badge: NonFungibleProof, cdp: NonFungibleBucket) {
+            // Validate own link badge
+            assert_eq!(self.link.amount(), dec!(1), "Cluster does not have a link badge");
+
             // Validate the CDP
             assert_eq!(cdp.amount(), dec!(1), "Invalid CDP amount; must contain 1 NFT");
             assert_eq!(cdp.resource_address(), self.cdp_manager.address(), "Invalid CDP resource address");
 
-            // Validate the user badge and platform
-            // let verified_user = self.__validate_user(user_badge, platform);
+            // Update the user's badge
+            let link_local_id = self.link.non_fungible_local_id();
+            let link_badge = self.link.create_proof_of_non_fungibles(&indexset![link_local_id]);
+
+            let platform: Global<AnyComponent> = self.platform_address.into();
+            platform.call_raw::<()>("open_account", scrypto_args!(link_badge, user_badge));
+
+            // Add the CDP to the cluster
+            let cdp_local_id = cdp.non_fungible_local_id();
+            let cdp_vault = NonFungibleVault::with_bucket(cdp);
+            self.accounts.insert(cdp_local_id, cdp_vault);
         }
 
         pub fn close_account(&mut self, user_badge: NonFungibleProof) {} // -> NonFungibleBucket (CDP)
