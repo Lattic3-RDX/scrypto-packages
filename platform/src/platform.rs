@@ -156,6 +156,10 @@ mod platform {
             badge
         }
 
+        pub fn get_user_badge_address(&self) -> ResourceAddress {
+            self.user_badge_manager.address()
+        }
+
         //] ------------------- Links ------------------ */
         // RESTRICT can_link/component
         pub fn link_cluster(&mut self, cluster_address: ComponentAddress, package_address: PackageAddress) {

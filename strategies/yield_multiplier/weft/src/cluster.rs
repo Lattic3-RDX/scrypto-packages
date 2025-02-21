@@ -1,6 +1,8 @@
 /* ------------------ Imports ----------------- */
+use crate::execution::ExecutionTerms;
 use crate::weft::CDPData;
 use scrypto::prelude::*;
+use std::panic::catch_unwind;
 
 /* ----------------- Blueprint ---------------- */
 #[blueprint]
@@ -9,18 +11,19 @@ mod yield_multiplier_weft_v2_cluster {
 
     //] ------------- Cluster Blueprint ------------ /
 
-    use std::panic::catch_unwind;
-
     struct YieldMultiplierV1ClusterWeftV2 {
         // Authorisation
         component_address: ComponentAddress,
         owner_address: ResourceAddress,
-        // Links
-        links: KeyValueStore<ComponentAddress, NonFungibleVault>,
+        // Platform link
+        platform_address: ComponentAddress,
+        link: NonFungibleVault,
+        user_badge_address: ResourceAddress,
         // Cluster
         supply: ResourceAddress,
         debt: ResourceAddress,
-        accounts: KeyValueStore<NonFungibleLocalId, ()>,
+        accounts: KeyValueStore<NonFungibleLocalId, NonFungibleVault>,
+        execution_term_manager: NonFungibleResourceManager,
         // Integration
         cdp_manager: NonFungibleResourceManager,
     }
@@ -50,6 +53,22 @@ mod yield_multiplier_weft_v2_cluster {
             let owner_access_rule: AccessRule = rule!(require(owner_address));
             let owner_role: OwnerRole = OwnerRole::Fixed(owner_access_rule.clone());
 
+            // Execution term manager
+            let execution_term_manager = ResourceBuilder::new_ruid_non_fungible::<ExecutionTerms>(owner_role.clone())
+                .mint_roles(mint_roles! {
+                    minter         => component_access_rule.clone();
+                    minter_updater => rule!(deny_all);
+                })
+                .burn_roles(burn_roles! {
+                    burner         => component_access_rule.clone();
+                    burner_updater => rule!(deny_all);
+                })
+                .deposit_roles(deposit_roles! {
+                    depositor         => rule!(deny_all);
+                    depositor_updater => rule!(deny_all);
+                })
+                .create_with_no_initial_supply();
+
             //] Component Instantisation
             // Metadata
             let component_metadata = metadata! {
@@ -63,6 +82,7 @@ mod yield_multiplier_weft_v2_cluster {
                     "name"            => "L3//Cluster - Yield Multiplier V1@WeftV2", locked;
                     "description"     => "Lattic3 cluster component for the 'Yield Multiplier v1' strategy, built on top of the Weft V2 lending platform.", locked;
                     // "dapp_definition" => dapp_definition_address, updatable;
+                    "execution_terms" => execution_term_manager.address(), locked;
                 }
             };
 
@@ -79,6 +99,7 @@ mod yield_multiplier_weft_v2_cluster {
                 supply,
                 debt,
                 accounts: KeyValueStore::new(),
+                execution_term_manager,
                 cdp_manager: cdp_resource.into(),
             };
 
@@ -94,17 +115,38 @@ mod yield_multiplier_weft_v2_cluster {
         }
 
         //] ------------------- Links ------------------ */
-        pub fn handle_link(&mut self, platform: ComponentAddress, bucket: NonFungibleBucket) {
+        pub fn handle_link(&mut self, bucket: NonFungibleBucket) {
             // Sanity checks
-            assert!(self.links.get(&platform).is_none(), "Platform already linked");
+            assert_eq!(self.link.amount(), dec!(0), "Platform already linked");
             assert_eq!(bucket.amount(), dec!(1), "Invalid bucket amount; must contain 1 link badge");
+            assert_eq!(
+                self.link.resource_address(),
+                bucket.resource_address(),
+                "Invalid link badge resource address"
+            );
 
             // Link platform
-            let vault = NonFungibleVault::with_bucket(bucket);
-            self.links.insert(platform, vault);
+            self.link.put(bucket);
         }
 
-        //] ----------------- Accounts ----------------- */
+        //] Private
+
+        //] ------------------ Cluster ----------------- */
+        pub fn add_account(&mut self, user_badge: NonFungibleProof, cdp: NonFungibleBucket) {
+            // Validate the CDP
+            assert_eq!(cdp.amount(), dec!(1), "Invalid CDP amount; must contain 1 NFT");
+            assert_eq!(cdp.resource_address(), self.cdp_manager.address(), "Invalid CDP resource address");
+
+            // Validate the user badge and platform
+            // let verified_user = self.__validate_user(user_badge, platform);
+        }
+
+        pub fn close_account(&mut self, user_badge: NonFungibleProof) {} // -> NonFungibleBucket (CDP)
+
+        // pub fn get_account_info(&self, local_id: NonFungibleLocalId) {}
+
+        pub fn execute(&mut self, user_badge: NonFungibleProof) {} // -> NonFungibleBucket (ExecutionTerms)
+
         //] ------------------- Weft ------------------- */
         pub fn validate_cdp(&self, local_id: NonFungibleLocalId) -> bool {
             // Parse CDP data or return false if fetching the data panics

@@ -1385,6 +1385,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "shared"
+version = "0.1.0"
+dependencies = [
+ "scrypto",
+]
+
+[[package]]
 name = "signature"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1992,6 +1999,7 @@ version = "1.0.0"
 dependencies = [
  "scrypto",
  "scrypto-test",
+ "shared",
 ]
 
 [[package]]
