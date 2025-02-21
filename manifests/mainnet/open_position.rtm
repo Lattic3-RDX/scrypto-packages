@@ -1,11 +1,10 @@
 # ------------------- User ------------------- #
 
-# Take own 0.2xUSDC
 CALL_METHOD
     Address("account_rdx12y4jmlyavnm3fkdc2ckuxpslnvt07cy8txmnyglve855q7m0akjtqp")
     "withdraw"
     Address("resource_rdx1t4upr78guuapv5ept7d7ptekk9mqhy605zgms33mcszen8l9fac8vf")
-    Decimal("0.2")
+    Decimal("10")
 ;
 
 # ------------------- Weft ------------------- #
@@ -15,7 +14,7 @@ CALL_METHOD
     Address("component_rdx1czmr02yl4da709ceftnm9dnmag7rthu0tu78wmtsn5us9j02d9d0xn")
     "take_flash_loan"
     Map<Address, Decimal>(
-        Address("resource_rdx1t4upr78guuapv5ept7d7ptekk9mqhy605zgms33mcszen8l9fac8vf") => Decimal("0.2")
+        Address("resource_rdx1t4upr78guuapv5ept7d7ptekk9mqhy605zgms33mcszen8l9fac8vf") => Decimal("11.011")
     )
 ;
 
@@ -39,7 +38,7 @@ TAKE_ALL_FROM_WORKTOP
     Bucket("supply")
 ;
 
-# Take 0XRD for no reason
+# Take 0XRD as payment for opening the CDP
 CALL_METHOD
     Address("account_rdx12y4jmlyavnm3fkdc2ckuxpslnvt07cy8txmnyglve855q7m0akjtqp")
     "withdraw"
@@ -49,16 +48,16 @@ CALL_METHOD
 TAKE_FROM_WORKTOP
     Address("resource_rdx1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxradxrd")
     Decimal("0")
-    Bucket("bucket1")
+    Bucket("fee")
 ;
 
-# Create position with 0.6xUSDC supply
+# Create position with w2-xUSDC supply
 CALL_METHOD
     Address("component_rdx1cpy6putj5p7937clqgcgutza7k53zpha039n9u5hkk0ahh4stdmq4w")
     "create_cdp"
-    Bucket("bucket1")
+    Bucket("fee")
     Enum<1u8>(
-        "lattic3_test_1"
+        "L3// Leveraged 1"
     )
     Enum<0u8>()
     Enum<0u8>()
@@ -81,18 +80,18 @@ TAKE_NON_FUNGIBLES_FROM_WORKTOP
 # Make proof from CDP
 CREATE_PROOF_FROM_BUCKET_OF_ALL
     Bucket("cdp")
-    Proof("Proof1")
+    Proof("cdp")
 ;
 
-# Borrow 0.4xUSDC in xwBTC 
+# Borrow xwBTC 
 CALL_METHOD
     Address("component_rdx1cpy6putj5p7937clqgcgutza7k53zpha039n9u5hkk0ahh4stdmq4w")
     "cdp_batch_operation"
-    Proof("Proof1")
+    Proof("cdp")
     Array<Bucket>()
     Array<Bucket>()
     Map<Address, Decimal>(
-        Address("resource_rdx1t580qxc7upat7lww4l2c4jckacafjeudxj5wpjrrct0p3e82sq4y75") => Decimal("0.0000033")
+        Address("resource_rdx1t580qxc7upat7lww4l2c4jckacafjeudxj5wpjrrct0p3e82sq4y75") => Decimal("0.0001133693358")
     )
     Array<Bucket>()
     Map<Address, Decimal>()
@@ -107,7 +106,7 @@ TAKE_ALL_FROM_WORKTOP
     Bucket("input_bucket_0")
 ;
 CALL_METHOD
-    Address("component_rdx1cpcd3wxrwgtldnrtkz995dzj6zhsqg2sym9tpqgmg7g9wsuu00jn65")
+    Address("component_rdx1cpgmgrskahkxe4lnpp9s2f5ga0z8jkl7ne8gjmw3fc2224lxq505mr")
     "swap"
     Bucket("input_bucket_0")
 ;
@@ -118,14 +117,14 @@ TAKE_ALL_FROM_WORKTOP
     Bucket("input_bucket_1")
 ;
 CALL_METHOD
-    Address("component_rdx1cq76gg42k73e9y7fcpy2q6d83nr703fa3xztc7lz5dnw38xkp2l5pt")
+    Address("component_rdx1cz8daq5nwmtdju4hj5rxud0ta26wf90sdk5r4nj9fqjcde5eht8p0f")
     "swap"
     Bucket("input_bucket_1")
 ;
                     
 ASSERT_WORKTOP_CONTAINS
     Address("resource_rdx1t4upr78guuapv5ept7d7ptekk9mqhy605zgms33mcszen8l9fac8vf")
-    Decimal("0.3")
+    Decimal("11.022011")
 ;
 
 # ------------------- Weft ------------------- #
