@@ -1,5 +1,11 @@
 use scrypto::prelude::*;
 
+#[derive(ScryptoSbor, Debug)]
+pub enum UserBadge {
+    Raw(NonFungibleProof),
+    Valid(CheckedNonFungibleProof),
+}
+
 #[derive(NonFungibleData, ScryptoSbor)]
 pub struct User {
     // #[immutable]

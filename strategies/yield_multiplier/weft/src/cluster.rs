@@ -2,11 +2,14 @@
 use crate::execution::ExecutionTerms;
 use crate::weft::CDPData;
 use scrypto::prelude::*;
+use shared::users::UserBadge;
 use std::panic::catch_unwind;
 
 /* ----------------- Blueprint ---------------- */
 #[blueprint]
 mod yield_multiplier_weft_v2_cluster {
+    use crate::execution;
+
     //] --------------- Scrypto Setup -------------- */
     //] ------------- Cluster Blueprint ------------ */
     struct YieldMultiplierV1ClusterWeftV2 {
@@ -134,6 +137,16 @@ mod yield_multiplier_weft_v2_cluster {
         }
 
         //] Private
+        fn __linked_call<T: ScryptoDecode>(&self, method: &str, mut args: Vec<u8>) -> T {
+            let link_local_id = self.link.non_fungible_local_id();
+            let link_badge = self.link.create_proof_of_non_fungibles(&indexset![link_local_id]);
+
+            let platform: Global<AnyComponent> = self.platform_address.into();
+            let mut method_args = scrypto_args!(link_badge);
+            method_args.append(&mut args);
+
+            platform.call_raw::<T>(method, method_args)
+        }
 
         //] ------------------ Cluster ----------------- */
         pub fn open_account(&mut self, user_badge: NonFungibleProof, cdp: NonFungibleBucket) {
@@ -144,12 +157,12 @@ mod yield_multiplier_weft_v2_cluster {
             assert_eq!(cdp.amount(), dec!(1), "Invalid CDP amount; must contain 1 NFT");
             assert_eq!(cdp.resource_address(), self.cdp_manager.address(), "Invalid CDP resource address");
 
-            // Update the user's badge
-            let link_local_id = self.link.non_fungible_local_id();
-            let link_badge = self.link.create_proof_of_non_fungibles(&indexset![link_local_id]);
+            let cdp_valid = self.validate_cdp(cdp.non_fungible_local_id());
+            assert!(cdp_valid, "Invalid CDP");
 
-            let platform: Global<AnyComponent> = self.platform_address.into();
-            platform.call_raw::<()>("open_account", scrypto_args!(link_badge, user_badge));
+            // Update the user's badge
+            let raw_badge = UserBadge::Raw(user_badge);
+            self.__linked_call::<()>("open_account", scrypto_args!(raw_badge));
 
             // Add the CDP to the cluster
             let cdp_local_id = cdp.non_fungible_local_id();
@@ -157,11 +170,71 @@ mod yield_multiplier_weft_v2_cluster {
             self.accounts.insert(cdp_local_id, cdp_vault);
         }
 
-        pub fn close_account(&mut self, user_badge: NonFungibleProof) {} // -> NonFungibleBucket (CDP)
+        pub fn close_account(&mut self, user_badge: NonFungibleProof) -> NonFungibleBucket {
+            // Validate own link badge
+            assert_eq!(self.link.amount(), dec!(1), "Cluster does not have a link badge");
+
+            // Validate and update the user's badge
+            let raw_badge = UserBadge::Raw(user_badge);
+            let valid_user = self.__linked_call::<CheckedNonFungibleProof>("validate_user", scrypto_args!(raw_badge));
+
+            // Extract the CDP and remove it from the cluster
+            let local_id = valid_user.non_fungible_local_id();
+            let cdp_bucket = self.accounts.remove(&local_id).expect("User has no open account").take_all();
+
+            cdp_bucket
+        }
 
         // pub fn get_account_info(&self, local_id: NonFungibleLocalId) {}
 
-        pub fn execute(&mut self, user_badge: NonFungibleProof) {} // -> NonFungibleBucket (ExecutionTerms)
+        pub fn start_execution(&mut self, user_badge: NonFungibleProof) -> (NonFungibleBucket, NonFungibleBucket) {
+            // Validate own link badge
+            assert_eq!(self.link.amount(), dec!(1), "Cluster does not have a link badge");
+
+            // Validate the user's badge and get the CDP
+            let raw_badge = UserBadge::Raw(user_badge);
+            let valid_user = self.__linked_call::<CheckedNonFungibleProof>("validate_user", scrypto_args!(raw_badge));
+
+            let local_id = valid_user.non_fungible_local_id();
+            let cdp_bucket = self.accounts.remove(&local_id).expect("User has no open account").take_all();
+
+            // Mint the execution terms
+            let execution_terms = ExecutionTerms::new();
+            let terms_bucket = self.execution_term_manager.mint_ruid_non_fungible(execution_terms);
+
+            // Return CDP and execution terms
+            (cdp_bucket, terms_bucket)
+        }
+
+        pub fn end_execution(&mut self, user_badge: NonFungibleProof, cdp_bucket: NonFungibleBucket, terms_bucket: NonFungibleBucket) {
+            // Validate own link badge
+            assert_eq!(self.link.amount(), dec!(1), "Cluster does not have a link badge");
+
+            // Validate the user's badge
+            let raw_badge = UserBadge::Raw(user_badge);
+            self.__linked_call::<CheckedNonFungibleProof>("validate_user", scrypto_args!(raw_badge));
+
+            // Validate the execution terms
+            assert_eq!(terms_bucket.amount(), dec!(1), "Invalid execution terms amount; must contain 1 NFT");
+            assert_eq!(
+                terms_bucket.resource_address(),
+                self.execution_term_manager.address(),
+                "Invalid execution terms resource address"
+            );
+
+            // let local_id = terms_bucket.non_fungible_local_id();
+            // let execution_terms: ExecutionTerms = self.execution_term_manager.get_non_fungible_data(&local_id);
+
+            // Validate the cdp
+            assert_eq!(cdp_bucket.amount(), dec!(1), "Invalid CDP amount; must contain 1 NFT");
+            assert_eq!(cdp_bucket.resource_address(), self.cdp_manager.address(), "Invalid CDP resource address");
+
+            let cdp_valid = self.validate_cdp(cdp_bucket.non_fungible_local_id());
+            assert!(cdp_valid, "Invalid CDP");
+
+            // Burn the terms
+            self.execution_term_manager.burn(terms_bucket);
+        }
 
         //] ------------------- Weft ------------------- */
         pub fn validate_cdp(&self, local_id: NonFungibleLocalId) -> bool {

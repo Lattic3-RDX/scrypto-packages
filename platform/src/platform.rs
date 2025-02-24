@@ -1,9 +1,9 @@
 /* ------------------ Imports ----------------- */
 use crate::clusters::ClusterWrapper;
 use crate::services::cluster_services::ClusterService;
-use crate::users::User;
 use scrypto::prelude::*;
 use shared::links::Link;
+use shared::users::{User, UserBadge};
 
 /* ----------------- Blueprint ---------------- */
 #[blueprint]
@@ -16,6 +16,7 @@ mod platform {
         methods {
             // User
             new_user      => PUBLIC;
+            validate_user => PUBLIC;
             open_account  => PUBLIC; // Restricted by link badge
             close_account => PUBLIC; // Restricted by link badge
             // Links
@@ -175,7 +176,14 @@ mod platform {
             badge
         }
 
-        pub fn open_account(&self, link_badge: NonFungibleProof, user_badge: NonFungibleProof) {
+        pub fn validate_user(&self, user_badge: NonFungibleProof) -> CheckedNonFungibleProof {
+            let valid_user = user_badge.check_with_message(self.user_badge_manager.address(), "User badge not valid");
+            assert_eq!(valid_user.amount(), dec!(1), "Invalid user badge quantity");
+
+            valid_user
+        }
+
+        pub fn open_account(&self, link_badge: NonFungibleProof, user_badge: UserBadge) {
             // TODO: integrate own service
 
             // Validate the link
@@ -184,8 +192,10 @@ mod platform {
             assert_eq!(can_update_badge, true, "ClusterService::UpdateBadge disabled");
 
             // Validate the user badge
-            let valid_user = user_badge.check_with_message(self.user_badge_manager.address(), "User badge not valid");
-            assert_eq!(valid_user.amount(), dec!(1), "Invalid user badge quantity");
+            let valid_user = match user_badge {
+                UserBadge::Raw(proof) => self.validate_user(proof),
+                UserBadge::Valid(valid_user) => valid_user,
+            };
 
             // Open account and update badge
             let local_id = &valid_user.non_fungible_local_id();
