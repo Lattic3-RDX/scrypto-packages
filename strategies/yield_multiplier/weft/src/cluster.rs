@@ -7,12 +7,10 @@ use std::panic::catch_unwind;
 
 /* ----------------- Blueprint ---------------- */
 #[blueprint]
-mod yield_multiplier_weft_v2_cluster {
-    use crate::execution;
-
+mod yield_multiplier_cluster_weft_v2 {
     //] --------------- Scrypto Setup -------------- */
     //] ------------- Cluster Blueprint ------------ */
-    struct YieldMultiplierV1ClusterWeftV2 {
+    struct YieldMultiplierClusterWeftV2 {
         // Authorisation
         component_address: ComponentAddress,
         owner_address: ResourceAddress,
@@ -29,7 +27,7 @@ mod yield_multiplier_weft_v2_cluster {
         cdp_manager: NonFungibleResourceManager,
     }
 
-    impl YieldMultiplierV1ClusterWeftV2 {
+    impl YieldMultiplierClusterWeftV2 {
         pub fn instantiate(
             // Authorisation
             owner_proof: FungibleProof,
@@ -42,9 +40,9 @@ mod yield_multiplier_weft_v2_cluster {
             debt: ResourceAddress,
             // Integration
             cdp_resource: ResourceAddress,
-        ) -> Global<YieldMultiplierV1ClusterWeftV2> {
+        ) -> Global<YieldMultiplierClusterWeftV2> {
             // Reserve component address
-            let (address_reservation, component_address) = Runtime::allocate_component_address(YieldMultiplierV1ClusterWeftV2::blueprint_id());
+            let (address_reservation, component_address) = Runtime::allocate_component_address(YieldMultiplierClusterWeftV2::blueprint_id());
 
             //] Authorisation
             // Component
@@ -110,7 +108,7 @@ mod yield_multiplier_weft_v2_cluster {
                 cdp_manager: cdp_resource.into(),
             };
 
-            let component: Global<YieldMultiplierV1ClusterWeftV2> = initial_state
+            let component: Global<YieldMultiplierClusterWeftV2> = initial_state
                 .instantiate()
                 .prepare_to_globalize(owner_role)
                 // .roles(component_roles)
