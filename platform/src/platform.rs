@@ -167,14 +167,10 @@ mod platform {
 
             // Create empty user badge
             let badge_data: User = User::new();
-            info!("Created badge data");
             let badge_id = NonFungibleLocalId::Integer(self.user_count.into());
-            info!("{:?}", badge_id);
-            info!("Minted badge");
 
             // Increment user badge count
             self.user_count += 1;
-            info!("Incremented user badge count");
 
             self.user_badge_manager.mint_non_fungible(&badge_id, badge_data)
         }
