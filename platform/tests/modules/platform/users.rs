@@ -2,40 +2,64 @@ use crate::helpers::runner::TestRunner;
 use scrypto_test::prelude::*;
 
 #[test]
-fn test_valid_new_user_badge() {
+fn test_valid_mint_new_user_badge() {
     //] Arrange
     let mut runner = TestRunner::new();
 
     //] Act
     let manifest = ManifestBuilder::new()
         .lock_fee_from_faucet()
-        .call_method(runner.platform.component_address, "new_user", manifest_args!())
+        .call_method(runner.platform.component, "new_user", manifest_args!())
         .deposit_batch(runner.alice_account.address, ManifestExpression::EntireWorktop)
         .build();
 
     //] Assert
     let receipt = runner.ledger.execute_manifest(manifest, vec![runner.alice_account.global_id()]);
 
-    println!("{:?}\n", receipt);
+    // println!("{:?}\n", receipt);
     receipt.expect_commit_success();
 
-    // let alice_resources = runner.ledger.get_component_resources(runner.alice_account.address);
+    let alice_resources = runner.ledger.get_component_resources(runner.alice_account.address);
 
-    // assert_eq!(alice_resources.len(), 1);
+    assert_eq!(alice_resources.len(), 1);
 }
 
 #[test]
-#[ignore = "Placeholder"]
-fn test_new_user_when_service_disabled() {}
+#[ignore = "invalid"]
+fn test_validate_user_badge() {
+    //] Arrange
+    let mut runner = TestRunner::new();
 
-#[test]
-#[ignore = "Placeholder"]
-fn test_valid_cluster_badge_update() {}
+    let manifest = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .call_method(runner.platform.component, "new_user", manifest_args!())
+        .deposit_batch(runner.alice_account.address, ManifestExpression::EntireWorktop)
+        .build();
 
-#[test]
-#[ignore = "Placeholder"]
-fn test_cluster_badge_update_when_platform_service_disabled() {}
+    let receipt = runner.ledger.execute_manifest(manifest, vec![runner.alice_account.global_id()]);
 
-#[test]
-#[ignore = "Placeholder"]
-fn test_cluster_badge_update_when_cluster_service_disabled() {}
+    // println!("{:?}\n", receipt);
+    receipt.expect_commit_success();
+
+    let alice_resources = runner.ledger.get_component_resources(runner.alice_account.address);
+
+    assert_eq!(alice_resources.len(), 1);
+
+    //] Act
+    let manifest = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .create_proof_from_account_of_non_fungibles(
+            runner.alice_account.address,
+            runner.platform.user_badge,
+            vec![NonFungibleLocalId::Integer(0.into())],
+        )
+        .pop_from_auth_zone("user_proof")
+        .call_method_with_name_lookup(runner.platform.component, "validate_user", |lookup| (lookup.proof("user_proof"),))
+        .build();
+
+    //] Assert
+    let receipt = runner.ledger.execute_manifest(manifest, vec![runner.alice_account.global_id()]);
+
+    // println!("{:?}\n", receipt);
+    receipt.expect_commit_success();
+}

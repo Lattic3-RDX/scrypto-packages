@@ -16,13 +16,14 @@ mod platform {
         methods {
             // User
             new_user      => PUBLIC;
-            validate_user => PUBLIC;
             open_account  => PUBLIC; // Restricted by link badge
             close_account => PUBLIC; // Restricted by link badge
             // Links
             link_cluster   => restrict_to: [can_manage_links, OWNER, SELF];
             unlink_cluster => restrict_to: [can_manage_links, OWNER, SELF];
             update_cluster_service => restrict_to: [can_manage_links, OWNER, SELF];
+            // State
+            get_user_badge_address => PUBLIC;
         }
     }
 
@@ -175,13 +176,6 @@ mod platform {
             self.user_badge_manager.mint_non_fungible(&badge_id, badge_data)
         }
 
-        pub fn validate_user(&self, user_badge: NonFungibleProof) -> CheckedNonFungibleProof {
-            let valid_user = user_badge.check_with_message(self.user_badge_manager.address(), "User badge not valid");
-            assert_eq!(valid_user.amount(), dec!(1), "Invalid user badge quantity");
-
-            valid_user
-        }
-
         pub fn open_account(&self, link_badge: NonFungibleProof, user_badge: UserBadge) {
             // TODO: integrate own service
 
@@ -192,7 +186,7 @@ mod platform {
 
             // Validate the user badge
             let valid_user = match user_badge {
-                UserBadge::Raw(proof) => self.validate_user(proof),
+                UserBadge::Raw(proof) => self.__validate_user(proof),
                 UserBadge::Valid(valid_user) => valid_user,
             };
 
@@ -206,7 +200,7 @@ mod platform {
             self.user_badge_manager.update_non_fungible_data(local_id, "open", user.open);
         }
 
-        pub fn close_account(&self, link_badge: NonFungibleProof, user_badge: NonFungibleProof) {
+        pub fn close_account(&self, link_badge: NonFungibleProof, user_badge: UserBadge) {
             // TODO: integrate own service
 
             // Validate the link
@@ -215,8 +209,10 @@ mod platform {
             assert_eq!(can_update_badge, true, "ClusterService::UpdateBadge disabled");
 
             // Validate the user badge
-            let valid_user = user_badge.check_with_message(self.user_badge_manager.address(), "User badge not valid");
-            assert_eq!(valid_user.amount(), dec!(1), "Invalid user badge quantity");
+            let valid_user = match user_badge {
+                UserBadge::Raw(proof) => self.__validate_user(proof),
+                UserBadge::Valid(valid_user) => valid_user,
+            };
 
             // Open account and update badge
             let local_id = &valid_user.non_fungible_local_id();
@@ -226,6 +222,14 @@ mod platform {
             self.user_badge_manager
                 .update_non_fungible_data(local_id, "accounts_in", user.accounts_in);
             self.user_badge_manager.update_non_fungible_data(local_id, "open", user.open);
+        }
+
+        //] Private
+        fn __validate_user(&self, user_badge: NonFungibleProof) -> CheckedNonFungibleProof {
+            let valid_user = user_badge.check_with_message(self.user_badge_manager.address(), "User badge not valid");
+            assert_eq!(valid_user.amount(), dec!(1), "Invalid user badge quantity");
+
+            valid_user
         }
 
         //] ------------------- Links ------------------ */
@@ -282,6 +286,11 @@ mod platform {
 
             // Return the ClusterWrapper
             wrapper.clone()
+        }
+
+        //] ------------------- State ------------------ */
+        pub fn get_user_badge_address(&self) -> ResourceAddress {
+            self.user_badge_manager.address()
         }
 
         // ! ------------------ Testing ----------------- */

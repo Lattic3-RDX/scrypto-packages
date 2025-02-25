@@ -9,6 +9,7 @@ use std::panic::catch_unwind;
 #[blueprint]
 mod yield_multiplier_cluster_weft_v2 {
     //] --------------- Scrypto Setup -------------- */
+
     //] ------------- Cluster Blueprint ------------ */
     struct YieldMultiplierClusterWeftV2 {
         // Authorisation
@@ -135,6 +136,13 @@ mod yield_multiplier_cluster_weft_v2 {
         }
 
         //] Private
+        fn __validate_user(&self, user_badge: NonFungibleProof) -> CheckedNonFungibleProof {
+            let valid_user = user_badge.check_with_message(self.user_badge_address, "User badge not valid");
+            assert_eq!(valid_user.amount(), dec!(1), "Invalid user badge quantity");
+
+            valid_user
+        }
+
         fn __linked_call<T: ScryptoDecode>(&self, method: &str, mut args: Vec<u8>) -> T {
             let link_local_id = self.link.non_fungible_local_id();
             let link_badge = self.link.create_proof_of_non_fungibles(&indexset![link_local_id]);
@@ -159,8 +167,8 @@ mod yield_multiplier_cluster_weft_v2 {
             assert!(cdp_valid, "Invalid CDP");
 
             // Update the user's badge
-            let raw_badge = UserBadge::Raw(user_badge);
-            self.__linked_call::<()>("open_account", scrypto_args!(raw_badge));
+            let valid_user = UserBadge::Valid(self.__validate_user(user_badge));
+            self.__linked_call::<()>("open_account", scrypto_args!(valid_user));
 
             // Add the CDP to the cluster
             let cdp_local_id = cdp.non_fungible_local_id();
@@ -173,8 +181,7 @@ mod yield_multiplier_cluster_weft_v2 {
             assert_eq!(self.link.amount(), dec!(1), "Cluster does not have a link badge");
 
             // Validate and update the user's badge
-            let raw_badge = UserBadge::Raw(user_badge);
-            let valid_user = self.__linked_call::<CheckedNonFungibleProof>("validate_user", scrypto_args!(raw_badge));
+            let valid_user = self.__validate_user(user_badge);
 
             // Extract the CDP and remove it from the cluster
             let local_id = valid_user.non_fungible_local_id();
@@ -190,8 +197,7 @@ mod yield_multiplier_cluster_weft_v2 {
             assert_eq!(self.link.amount(), dec!(1), "Cluster does not have a link badge");
 
             // Validate the user's badge and get the CDP
-            let raw_badge = UserBadge::Raw(user_badge);
-            let valid_user = self.__linked_call::<CheckedNonFungibleProof>("validate_user", scrypto_args!(raw_badge));
+            let valid_user = self.__validate_user(user_badge);
 
             let local_id = valid_user.non_fungible_local_id();
             let cdp_bucket = self.accounts.remove(&local_id).expect("User has no open account").take_all();
@@ -209,8 +215,7 @@ mod yield_multiplier_cluster_weft_v2 {
             assert_eq!(self.link.amount(), dec!(1), "Cluster does not have a link badge");
 
             // Validate the user's badge
-            let raw_badge = UserBadge::Raw(user_badge);
-            self.__linked_call::<CheckedNonFungibleProof>("validate_user", scrypto_args!(raw_badge));
+            let valid_user = self.__validate_user(user_badge);
 
             // Validate the execution terms
             assert_eq!(terms_bucket.amount(), dec!(1), "Invalid execution terms amount; must contain 1 NFT");
