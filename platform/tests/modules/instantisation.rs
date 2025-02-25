@@ -16,7 +16,6 @@ fn simple_package_can_be_published() {
 }
 
 #[test]
-
 fn test_platform_instantiates() {
     // Arrange
     let mut ledger = LedgerSimulatorBuilder::new().build();
