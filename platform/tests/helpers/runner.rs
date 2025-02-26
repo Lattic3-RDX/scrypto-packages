@@ -1,20 +1,22 @@
-use crate::helpers::{integrations::weft::HelperWeftV2, platform::HelperPlatform, prelude::*};
+use crate::helpers::{faucet::Faucet, platform::PlatformFactory, prelude::*};
 use scrypto_test::prelude::*;
 
-pub struct TestRunner {
+use super::platform::Platform;
+
+pub struct Runner {
     // Simulation
     pub ledger: Ledger,
     // Accounts
     pub owner_account: SimAccount,
+    // pub owner_badge: ResourceAddress,
     pub alice_account: SimAccount,
     pub bob_account: SimAccount,
     // Components
-    pub platform: HelperPlatform,
-    // Integrations
-    pub weftv2: Option<HelperWeftV2>,
+    pub faucet: Faucet,
+    pub platform_factory: PlatformFactory,
 }
 
-impl TestRunner {
+impl Runner {
     pub fn new() -> Self {
         // Arrange simulator
         let mut ledger = LedgerSimulatorBuilder::new().build();
@@ -24,28 +26,32 @@ impl TestRunner {
         let alice_account = SimAccount::new(&mut ledger);
         let bob_account = SimAccount::new(&mut ledger);
 
-        // Create platform helper
-        let platform = HelperPlatform::new(&mut ledger, owner_account.clone());
+        // Create faucet
+        let faucet = Faucet::new(&mut ledger, owner_account.clone());
+
+        // Create platform factory
+        let platform_factory = PlatformFactory::new(&mut ledger);
 
         // Return environment
-        TestRunner {
+        Runner {
             // Simulation
             ledger,
             // Accounts
             owner_account,
+            // owner_badge: platform.owner_badge,
             alice_account,
             bob_account,
             // Components
-            platform,
-            // Integrations
-            weftv2: None,
+            faucet,
+            platform_factory,
         }
     }
 
-    pub fn new_weft() -> Self {
-        let mut base = TestRunner::new();
-        let weftv2 = HelperWeftV2::new(&mut base);
+    pub fn new_base() -> (Self, Platform) {
+        let mut runner = Runner::new();
 
-        TestRunner { weftv2: Some(weftv2), ..base }
+        let platform = runner.platform_factory.instantiate(&mut runner.ledger, runner.owner_account);
+
+        (runner, platform)
     }
 }

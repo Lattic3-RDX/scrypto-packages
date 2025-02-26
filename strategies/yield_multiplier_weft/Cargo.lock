@@ -1994,7 +1994,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "yield_multiplier_weft_v2"
+name = "yield_multiplier_weftv2"
 version = "1.0.0"
 dependencies = [
  "scrypto",

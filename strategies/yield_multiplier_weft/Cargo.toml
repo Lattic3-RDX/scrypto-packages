@@ -1,11 +1,11 @@
 [package]
-name = "yield_multiplier_weft_v2"
+name = "yield_multiplier_weftv2"
 version = "1.0.0"
 edition = "2021"
 
 [dependencies]
 scrypto = { version = "1.3.0" }
-shared = { version = "0.1.0", path = "../../../shared" }
+shared = { version = "0.1.0", path = "../../shared" }
 
 [dev-dependencies]
 scrypto-test = { version = "1.3.0" }

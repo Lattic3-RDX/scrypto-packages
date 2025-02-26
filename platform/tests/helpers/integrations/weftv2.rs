@@ -1,15 +1,16 @@
-use crate::helpers::{prelude::*, runner::TestRunner};
-use scrypto::prelude::indexmap::IndexMap;
+use crate::helpers::{prelude::*, runner::Runner};
+use scrypto::prelude::indexmap::{IndexMap, IndexSet};
 use scrypto_test::prelude::*;
 
-/* ------------------ Helper ------------------ */
-pub struct HelperWeftV2 {
+//] ------------ Mock Implementation ----------- */
+#[derive(Debug, Clone, Copy)]
+pub struct MockWeftV2 {
     pub cdp: ResourceAddress,
     pub cdp_count: u64,
 }
 
-impl HelperWeftV2 {
-    pub fn new(runner: &mut TestRunner) -> Self {
+impl MockWeftV2 {
+    pub fn new(runner: &mut Runner) -> Self {
         // Create CDP NFT
         let manifest = ManifestBuilder::new()
             .lock_fee_from_faucet()
@@ -19,8 +20,14 @@ impl HelperWeftV2 {
                 true,
                 // Allow anyone to mint/burn, keep rest as default
                 NonFungibleResourceRoles {
-                    mint_roles: Some(MintRoles { minter: Some(AccessRule::AllowAll), minter_updater: Some(AccessRule::AllowAll) }),
-                    burn_roles: Some(BurnRoles { burner: Some(AccessRule::AllowAll), burner_updater: Some(AccessRule::AllowAll) }),
+                    mint_roles: mint_roles! {
+                        minter         => rule!(allow_all);
+                        minter_updater => rule!(deny_all);
+                    },
+                    burn_roles: burn_roles! {
+                        burner         => rule!(allow_all);
+                        burner_updater => rule!(deny_all);
+                    },
                     ..NonFungibleResourceRoles::default()
                 },
                 metadata!(
@@ -43,7 +50,49 @@ impl HelperWeftV2 {
         Self { cdp, cdp_count: 0 }
     }
 
-    pub fn mint(&mut self, runner: &mut TestRunner, target: SimAccount) -> NonFungibleLocalId {
+    pub fn mint(
+        &mut self,
+        runner: &mut Runner,
+        target: SimAccount,
+        loans: Option<IndexMap<ResourceAddress, Decimal>>,
+        collaterals: Option<IndexMap<ResourceAddress, Decimal>>,
+        nft: bool,
+    ) -> NonFungibleLocalId {
+        // Convert loan mapping with decimal input to one with loan info
+        let loans: IndexMap<ResourceAddress, LoanInfo> = match loans {
+            Some(loans) => loans
+                .iter()
+                .map(|(&address, &units)| (address, LoanInfo { units, config_version: 1 }))
+                .collect(),
+            None => IndexMap::new(),
+        };
+
+        // Convert collateral mapping with decimal input to one with collateral info
+        let collaterals: IndexMap<ResourceAddress, CollateralInfo> = match collaterals {
+            Some(collaterals) => collaterals
+                .iter()
+                .map(|(&address, &amount)| {
+                    let info = CollateralInfo {
+                        amount,
+                        config_version: CollateralConfigVersion { entry_version: 1, efficiency_mode: EfficiencyMode::None },
+                    };
+
+                    (address, info)
+                })
+                .collect(),
+            None => IndexMap::new(),
+        };
+
+        // Create mock NFT collateral mapping
+        let nft_collaterals: IndexMap<ResourceAddress, NFTCollateralInfo> = match nft {
+            true => {
+                let info = NFTCollateralInfo { nft_ids: IndexSet::new(), config_version: IndexMap::new() };
+
+                indexmap! { self.cdp => info }
+            }
+            false => IndexMap::new(),
+        };
+
         // Create CDP with mock data
         let data = CDPData {
             minted_at: Instant::new(0i64),
@@ -51,9 +100,9 @@ impl HelperWeftV2 {
             key_image_url: String::new(),
             name: format!("Mock CDP {}", self.cdp_count),
             description: String::new(),
-            loans: IndexMap::new(),
-            collaterals: IndexMap::new(),
-            nft_collaterals: IndexMap::new(),
+            loans,
+            collaterals,
+            nft_collaterals,
         };
 
         // Mint the CDP
@@ -73,6 +122,10 @@ impl HelperWeftV2 {
 
         // Return the local id
         local_id
+    }
+
+    pub fn mint_empty(&mut self, runner: &mut Runner, target: SimAccount) -> NonFungibleLocalId {
+        self.mint(runner, target, None, None, false)
     }
 }
 

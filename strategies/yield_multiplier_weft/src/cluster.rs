@@ -7,14 +7,14 @@ use std::panic::catch_unwind;
 
 /* ----------------- Blueprint ---------------- */
 #[blueprint]
-mod yield_multiplier_cluster_weft_v2 {
-    //] --------------- Scrypto Setup -------------- */
+mod yield_multiplier_weftv2_cluster {
+    use shared::users::User;
 
+    //] --------------- Scrypto Setup -------------- */
     //] ------------- Cluster Blueprint ------------ */
-    struct YieldMultiplierClusterWeftV2 {
+    struct YieldMultiplierWeftV2Cluster {
         // Authorisation
         component_address: ComponentAddress,
-        owner_address: ResourceAddress,
         // Platform link
         platform_address: ComponentAddress,
         link: NonFungibleVault,
@@ -28,10 +28,10 @@ mod yield_multiplier_cluster_weft_v2 {
         cdp_manager: NonFungibleResourceManager,
     }
 
-    impl YieldMultiplierClusterWeftV2 {
+    impl YieldMultiplierWeftV2Cluster {
         pub fn instantiate(
             // Authorisation
-            owner_proof: FungibleProof,
+            owner_rule: AccessRule,
             // Link
             platform_address: ComponentAddress,
             link_resource: ResourceAddress,
@@ -41,9 +41,9 @@ mod yield_multiplier_cluster_weft_v2 {
             debt: ResourceAddress,
             // Integration
             cdp_resource: ResourceAddress,
-        ) -> Global<YieldMultiplierClusterWeftV2> {
+        ) -> Global<YieldMultiplierWeftV2Cluster> {
             // Reserve component address
-            let (address_reservation, component_address) = Runtime::allocate_component_address(YieldMultiplierClusterWeftV2::blueprint_id());
+            let (address_reservation, component_address) = Runtime::allocate_component_address(YieldMultiplierWeftV2Cluster::blueprint_id());
 
             //] Authorisation
             // Component
@@ -53,9 +53,7 @@ mod yield_multiplier_cluster_weft_v2 {
             // let platform_access_rule: AccessRule = rule!(require(global_caller(parent_platform)));
 
             // Component owner
-            let owner_address = owner_proof.resource_address();
-            let owner_access_rule: AccessRule = rule!(require(owner_address));
-            let owner_role: OwnerRole = OwnerRole::Fixed(owner_access_rule.clone());
+            let owner_role: OwnerRole = OwnerRole::Fixed(owner_rule.clone());
 
             // Execution term manager
             let execution_term_manager = ResourceBuilder::new_ruid_non_fungible::<ExecutionTerms>(owner_role.clone())
@@ -98,7 +96,6 @@ mod yield_multiplier_cluster_weft_v2 {
             // Instantisation
             let initial_state = Self {
                 component_address,
-                owner_address,
                 platform_address,
                 link: NonFungibleVault::new(link_resource),
                 user_badge_address,
@@ -109,7 +106,7 @@ mod yield_multiplier_cluster_weft_v2 {
                 cdp_manager: cdp_resource.into(),
             };
 
-            let component: Global<YieldMultiplierClusterWeftV2> = initial_state
+            let component: Global<YieldMultiplierWeftV2Cluster> = initial_state
                 .instantiate()
                 .prepare_to_globalize(owner_role)
                 // .roles(component_roles)
@@ -203,7 +200,7 @@ mod yield_multiplier_cluster_weft_v2 {
             let cdp_bucket = self.accounts.remove(&local_id).expect("User has no open account").take_all();
 
             // Mint the execution terms
-            let execution_terms = ExecutionTerms::new();
+            let execution_terms = ExecutionTerms::new(local_id);
             let terms_bucket = self.execution_term_manager.mint_ruid_non_fungible(execution_terms);
 
             // Return CDP and execution terms
@@ -223,6 +220,13 @@ mod yield_multiplier_cluster_weft_v2 {
                 terms_bucket.resource_address(),
                 self.execution_term_manager.address(),
                 "Invalid execution terms resource address"
+            );
+
+            let term_data: ExecutionTerms = terms_bucket.non_fungible().data();
+            assert_eq!(
+                term_data.user_local_id,
+                valid_user.non_fungible_local_id(),
+                "Presented user badge does not match the execution terms"
             );
 
             // let local_id = terms_bucket.non_fungible_local_id();
