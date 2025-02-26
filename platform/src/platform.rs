@@ -249,7 +249,7 @@ mod platform {
             self.linked_count += 1;
 
             // Create ClusterWrapper
-            let blueprint_id = ScryptoVmV1Api::object_get_blueprint_id(cluster_address.as_node_id()); // Fetch blueprint id to be group clusters by strategy
+            let blueprint_id = ScryptoVmV1Api::object_get_blueprint_id(cluster_address.as_node_id()); // Fetch blueprint id to group clusters by strategy
             let wrapper = ClusterWrapper::new(cluster_address, blueprint_id, link_id);
 
             // Deposit badge into cluster and insert into KV

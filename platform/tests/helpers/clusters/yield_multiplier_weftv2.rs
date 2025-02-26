@@ -9,7 +9,7 @@ pub struct YMWeftV2ClusterFactory {
 
 impl YMWeftV2ClusterFactory {
     pub fn new(ledger: &mut Ledger) -> Self {
-        let path = merge_path("../clusters/yield_multiplier_weftv2");
+        let path = merge_path("../strategies/yield_multiplier_weftv2");
         let package_address = ledger.compile_and_publish(path);
 
         Self { package_address }
