@@ -234,7 +234,7 @@ mod platform {
 
         //] ------------------- Links ------------------ */
         // RESTRICT can_link/component
-        pub fn link_cluster(&mut self, cluster_address: ComponentAddress, package_address: PackageAddress) {
+        pub fn link_cluster(&mut self, cluster_address: ComponentAddress) {
             // Ensure that the cluster hasn't already been linked
             assert!(self.linked_clusters.get(&cluster_address).is_none(), "Cluster already linked");
 
@@ -249,7 +249,8 @@ mod platform {
             self.linked_count += 1;
 
             // Create ClusterWrapper
-            let wrapper = ClusterWrapper::new(cluster_address, package_address, link_id);
+            let blueprint_id = ScryptoVmV1Api::object_get_blueprint_id(cluster_address.as_node_id()); // Fetch blueprint id to be group clusters by strategy
+            let wrapper = ClusterWrapper::new(cluster_address, blueprint_id, link_id);
 
             // Deposit badge into cluster and insert into KV
             wrapper.call::<()>("handle_link", scrypto_args!(link_badge));

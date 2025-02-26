@@ -12,8 +12,6 @@ fn test_valid_link_and_unlink() {
     let weftv2 = MockWeftV2::new(&mut runner);
     let ym_weftv2_cluster_factory = YMWeftV2ClusterFactory::new(&mut runner.ledger);
 
-    //] Act & Assert
-
     let owner_rule = rule!(require(platform.owner_badge));
     let supply = runner.faucet.usdt.address;
     let debt = runner.faucet.xwbtc.address;
@@ -28,4 +26,6 @@ fn test_valid_link_and_unlink() {
         debt,
         weftv2.cdp,
     );
+
+    //] Act & Assert
 }
