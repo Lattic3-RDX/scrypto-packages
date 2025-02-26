@@ -4,12 +4,12 @@ use scrypto_test::prelude::*;
 
 //] ------------ Mock Implementation ----------- */
 #[derive(Debug, Clone, Copy)]
-pub struct MockWeft {
+pub struct MockWeftV2 {
     pub cdp: ResourceAddress,
     pub cdp_count: u64,
 }
 
-impl MockWeft {
+impl MockWeftV2 {
     pub fn new(runner: &mut Runner) -> Self {
         // Create CDP NFT
         let manifest = ManifestBuilder::new()
@@ -32,7 +32,7 @@ impl MockWeft {
                 },
                 metadata!(
                     init {
-                        "name" => "Mock Weft CDP", locked;
+                        "name" => "Mock WeftV2 CDP", locked;
                     }
                 ),
                 None::<IndexMap<NonFungibleLocalId, CDPData>>,

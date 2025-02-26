@@ -1,5 +1,5 @@
 use crate::helpers::prelude::*;
-use crate::helpers::{clusters::yield_multiplier_weft::YMWeftClusterFactory, integrations::weft::MockWeft};
+use crate::helpers::{clusters::yield_multiplier_weftv2::YMWeftV2ClusterFactory, integrations::weftv2::MockWeftV2};
 use scrypto_test::prelude::*;
 
 #[test]
@@ -9,8 +9,8 @@ fn test_valid_link_and_unlink() {
     let (mut runner, platform) = Runner::new_base();
 
     // Instantiate a YieldMultiplierWeftCluster
-    let weft = MockWeft::new(&mut runner);
-    let ym_weft_cluster_factory = YMWeftClusterFactory::new(&mut runner.ledger);
+    let weftv2 = MockWeftV2::new(&mut runner);
+    let ym_weftv2_cluster_factory = YMWeftV2ClusterFactory::new(&mut runner.ledger);
 
     //] Act & Assert
 
@@ -18,7 +18,7 @@ fn test_valid_link_and_unlink() {
     let supply = runner.faucet.usdt.address;
     let debt = runner.faucet.xwbtc.address;
 
-    ym_weft_cluster_factory.instantiate(
+    ym_weftv2_cluster_factory.instantiate(
         &mut runner,
         owner_rule,
         platform.component,
@@ -26,6 +26,6 @@ fn test_valid_link_and_unlink() {
         platform.user_badge,
         supply,
         debt,
-        weft.cdp,
+        weftv2.cdp,
     );
 }

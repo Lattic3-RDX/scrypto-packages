@@ -3,13 +3,13 @@ use scrypto_test::prelude::*;
 
 //] ------------------ Factory ----------------- */
 #[derive(Debug, Clone, Copy)]
-pub struct YMWeftClusterFactory {
+pub struct YMWeftV2ClusterFactory {
     pub package_address: PackageAddress,
 }
 
-impl YMWeftClusterFactory {
+impl YMWeftV2ClusterFactory {
     pub fn new(ledger: &mut Ledger) -> Self {
-        let path = merge_path("../strategies/yield_multiplier_weft");
+        let path = merge_path("../clusters/yield_multiplier_weftv2");
         let package_address = ledger.compile_and_publish(path);
 
         Self { package_address }
@@ -29,14 +29,14 @@ impl YMWeftClusterFactory {
         debt: ResourceAddress,
         // Integration
         cdp_address: ResourceAddress,
-    ) -> YMWeftCluster {
+    ) -> YMWeftV2Cluster {
         // Call instantiation function
         #[rustfmt::skip]
         let manifest = ManifestBuilder::new()
             .lock_fee_from_faucet()
             .call_function(
                 self.package_address,
-                "YieldMultiplierWeftCluster", "instantiate",
+                "YieldMultiplierWeftV2Cluster", "instantiate",
                 manifest_args!(
                     owner_rule,
                     platform_address, link_address, user_badge_address,
@@ -57,8 +57,8 @@ impl YMWeftClusterFactory {
 
         println!("Execution Terms: {:?}\n", execution_terms,);
 
-        // Return HelperYMWeftCluster
-        YMWeftCluster {
+        // Return YMWeftV2Cluster
+        YMWeftV2Cluster {
             component_address,
             platform_address,
             link_address,
@@ -72,7 +72,7 @@ impl YMWeftClusterFactory {
 
 //] ------------------ Cluster ----------------- */
 #[derive(Debug, Clone, Copy)]
-pub struct YMWeftCluster {
+pub struct YMWeftV2Cluster {
     // General
     pub component_address: ComponentAddress,
     // Linking
@@ -82,6 +82,6 @@ pub struct YMWeftCluster {
     // Cluster
     pub supply: ResourceAddress,
     pub debt: ResourceAddress,
-    // Weft integration
+    // WeftV2 integration
     pub cdp_address: ResourceAddress,
 }
