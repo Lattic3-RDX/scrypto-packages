@@ -1,13 +1,13 @@
-use crate::helpers::{prelude::*, runner::Runner};
+use crate::helpers::prelude::*;
 use scrypto_test::prelude::*;
 
 //] ------------------ Factory ----------------- */
 #[derive(Debug, Clone, Copy)]
-pub struct YMWeftV2ClusterFactory {
+pub struct YMWeftClusterFactory {
     pub package_address: PackageAddress,
 }
 
-impl YMWeftV2ClusterFactory {
+impl YMWeftClusterFactory {
     pub fn new(ledger: &mut Ledger) -> Self {
         let path = merge_path("../strategies/yield_multiplier_weft");
         let package_address = ledger.compile_and_publish(path);
@@ -29,14 +29,14 @@ impl YMWeftV2ClusterFactory {
         debt: ResourceAddress,
         // Integration
         cdp_address: ResourceAddress,
-    ) -> YMWeftV2Cluster {
+    ) -> YMWeftCluster {
         // Call instantiation function
         #[rustfmt::skip]
         let manifest = ManifestBuilder::new()
             .lock_fee_from_faucet()
             .call_function(
                 self.package_address,
-                "YieldMultiplierWeftV2Cluster", "instantiate",
+                "YieldMultiplierWeftCluster", "instantiate",
                 manifest_args!(
                     owner_rule,
                     platform_address, link_address, user_badge_address,
@@ -57,8 +57,8 @@ impl YMWeftV2ClusterFactory {
 
         println!("Execution Terms: {:?}\n", execution_terms,);
 
-        // Return HelperYMWeftV2Cluster
-        YMWeftV2Cluster {
+        // Return HelperYMWeftCluster
+        YMWeftCluster {
             component_address,
             platform_address,
             link_address,
@@ -72,7 +72,7 @@ impl YMWeftV2ClusterFactory {
 
 //] ------------------ Cluster ----------------- */
 #[derive(Debug, Clone, Copy)]
-pub struct YMWeftV2Cluster {
+pub struct YMWeftCluster {
     // General
     pub component_address: ComponentAddress,
     // Linking
@@ -82,6 +82,6 @@ pub struct YMWeftV2Cluster {
     // Cluster
     pub supply: ResourceAddress,
     pub debt: ResourceAddress,
-    // WeftV2 integration
+    // Weft integration
     pub cdp_address: ResourceAddress,
 }

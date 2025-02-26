@@ -1,4 +1,4 @@
-use crate::helpers::runner::Runner;
+use crate::helpers::prelude::*;
 use scrypto_test::prelude::*;
 
 #[test]

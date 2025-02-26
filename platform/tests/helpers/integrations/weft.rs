@@ -1,15 +1,15 @@
-use crate::helpers::{prelude::*, runner::Runner};
+use crate::helpers::prelude::*;
 use scrypto::prelude::indexmap::{IndexMap, IndexSet};
 use scrypto_test::prelude::*;
 
 //] ------------ Mock Implementation ----------- */
 #[derive(Debug, Clone, Copy)]
-pub struct MockWeftV2 {
+pub struct MockWeft {
     pub cdp: ResourceAddress,
     pub cdp_count: u64,
 }
 
-impl MockWeftV2 {
+impl MockWeft {
     pub fn new(runner: &mut Runner) -> Self {
         // Create CDP NFT
         let manifest = ManifestBuilder::new()
@@ -32,7 +32,7 @@ impl MockWeftV2 {
                 },
                 metadata!(
                     init {
-                        "name" => "Mock WeftV2 CDP", locked;
+                        "name" => "Mock Weft CDP", locked;
                     }
                 ),
                 None::<IndexMap<NonFungibleLocalId, CDPData>>,
