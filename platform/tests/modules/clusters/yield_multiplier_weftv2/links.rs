@@ -16,7 +16,7 @@ fn test_valid_link_and_unlink() {
     let supply = runner.faucet.usdt.address;
     let debt = runner.faucet.xwbtc.address;
 
-    ym_weftv2_cluster_factory.instantiate(
+    let cluster = ym_weftv2_cluster_factory.instantiate(
         &mut runner,
         owner_rule,
         platform.component,
@@ -28,4 +28,23 @@ fn test_valid_link_and_unlink() {
     );
 
     //] Act & Assert
+    // Link cluster to platform
+    let manifest = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .create_proof_from_account_of_amount(runner.owner_account.address, platform.owner_badge, dec!(1))
+        .call_method(platform.component, "link_cluster", manifest_args!(cluster.component,))
+        .build();
+
+    let receipt = runner.ledger.execute_manifest(manifest, vec![runner.owner_account.global_id()]);
+    receipt.expect_commit_success();
+
+    // Unlink cluster from platform
+    let manifest = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .create_proof_from_account_of_amount(runner.owner_account.address, platform.owner_badge, dec!(1))
+        .call_method(platform.component, "unlink_cluster", manifest_args!(cluster.component,))
+        .build();
+
+    let receipt = runner.ledger.execute_manifest(manifest, vec![runner.owner_account.global_id()]);
+    receipt.expect_commit_success();
 }

@@ -1,2 +1,2 @@
-pub mod general;
+pub mod accounts;
 pub mod links;

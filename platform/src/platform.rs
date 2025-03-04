@@ -258,7 +258,8 @@ mod platform {
         }
 
         pub fn unlink_cluster(&mut self, cluster_address: ComponentAddress) {
-            let _wrapper = self.linked_clusters.get(&cluster_address).ok_or("Cluster already linked".to_string());
+            // let _wrapper = self.linked_clusters.get(&cluster_address).ok_or("Cluster already linked".to_string());
+            assert!(self.linked_clusters.get(&cluster_address).is_some(), "Cluster not linked");
 
             self.linked_clusters.remove(&cluster_address);
         }
@@ -293,7 +294,5 @@ mod platform {
         pub fn get_user_badge_address(&self) -> ResourceAddress {
             self.user_badge_manager.address()
         }
-
-        // ! ------------------ Testing ----------------- */
     }
 }

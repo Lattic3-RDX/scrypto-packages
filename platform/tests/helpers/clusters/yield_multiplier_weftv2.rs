@@ -21,14 +21,14 @@ impl YMWeftV2ClusterFactory {
         // Authorisation
         owner_rule: AccessRule,
         // Link
-        platform_address: ComponentAddress,
-        link_address: ResourceAddress,
-        user_badge_address: ResourceAddress,
+        platform: ComponentAddress,
+        link_badge: ResourceAddress,
+        user_badge: ResourceAddress,
         // Cluster
         supply: ResourceAddress,
         debt: ResourceAddress,
         // Integration
-        cdp_address: ResourceAddress,
+        cdp: ResourceAddress,
     ) -> YMWeftV2Cluster {
         // Call instantiation function
         #[rustfmt::skip]
@@ -39,9 +39,9 @@ impl YMWeftV2ClusterFactory {
                 "YieldMultiplierWeftV2Cluster", "instantiate",
                 manifest_args!(
                     owner_rule,
-                    platform_address, link_address, user_badge_address,
+                    platform, link_badge, user_badge,
                     supply, debt,
-                    cdp_address
+                    cdp
                 ),
             )
             .build();
@@ -52,21 +52,13 @@ impl YMWeftV2ClusterFactory {
         // println!("{:?}\n", receipt);
 
         // Collect output
-        let component_address = receipt.expect_commit_success().new_component_addresses()[0];
+        let component = receipt.expect_commit_success().new_component_addresses()[0];
         let execution_terms = receipt.expect_commit_success().new_resource_addresses()[0];
 
         println!("Execution Terms: {:?}\n", execution_terms,);
 
         // Return YMWeftV2Cluster
-        YMWeftV2Cluster {
-            component_address,
-            platform_address,
-            link_address,
-            user_badge_address,
-            supply,
-            debt,
-            cdp_address,
-        }
+        YMWeftV2Cluster { component, platform, link_badge, user_badge, supply, debt, cdp }
     }
 }
 
@@ -74,14 +66,14 @@ impl YMWeftV2ClusterFactory {
 #[derive(Debug, Clone, Copy)]
 pub struct YMWeftV2Cluster {
     // General
-    pub component_address: ComponentAddress,
+    pub component: ComponentAddress,
     // Linking
-    pub platform_address: ComponentAddress,
-    pub link_address: ResourceAddress,
-    pub user_badge_address: ResourceAddress,
+    pub platform: ComponentAddress,
+    pub link_badge: ResourceAddress,
+    pub user_badge: ResourceAddress,
     // Cluster
     pub supply: ResourceAddress,
     pub debt: ResourceAddress,
     // WeftV2 integration
-    pub cdp_address: ResourceAddress,
+    pub cdp: ResourceAddress,
 }

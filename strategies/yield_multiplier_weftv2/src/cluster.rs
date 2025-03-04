@@ -8,7 +8,6 @@ use std::panic::catch_unwind;
 /* ----------------- Blueprint ---------------- */
 #[blueprint]
 mod yield_multiplier_weftv2_cluster {
-    use shared::users::User;
 
     //] --------------- Scrypto Setup -------------- */
     //] ------------- Cluster Blueprint ------------ */
@@ -133,13 +132,6 @@ mod yield_multiplier_weftv2_cluster {
         }
 
         //] Private
-        fn __validate_user(&self, user_badge: NonFungibleProof) -> CheckedNonFungibleProof {
-            let valid_user = user_badge.check_with_message(self.user_badge_address, "User badge not valid");
-            assert_eq!(valid_user.amount(), dec!(1), "Invalid user badge quantity");
-
-            valid_user
-        }
-
         fn __linked_call<T: ScryptoDecode>(&self, method: &str, mut args: Vec<u8>) -> T {
             let link_local_id = self.link.non_fungible_local_id();
             let link_badge = self.link.create_proof_of_non_fungibles(&indexset![link_local_id]);
@@ -241,6 +233,14 @@ mod yield_multiplier_weftv2_cluster {
 
             // Burn the terms
             self.execution_term_manager.burn(terms_bucket);
+        }
+
+        //] Private
+        fn __validate_user(&self, user_badge: NonFungibleProof) -> CheckedNonFungibleProof {
+            let valid_user = user_badge.check_with_message(self.user_badge_address, "User badge not valid");
+            assert_eq!(valid_user.amount(), dec!(1), "Invalid user badge quantity");
+
+            valid_user
         }
 
         //] ------------------- Weft ------------------- */
