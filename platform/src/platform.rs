@@ -176,31 +176,40 @@ mod platform {
             self.user_badge_manager.mint_non_fungible(&badge_id, badge_data)
         }
 
-        pub fn open_account(&self, link_badge: NonFungibleProof, user_badge: UserBadge) {
-            // TODO: integrate own service
+        pub fn open_account(&self, link_badge: NonFungibleProof, user_id: NonFungibleLocalId) {
+            // // TODO: integrate own service
+            info!("Open account");
 
             // Validate the link
             let wrapper = self.__validate_link(link_badge);
             let can_update_badge = wrapper.services.get_service(ClusterService::UpdateBadge).value;
             assert_eq!(can_update_badge, true, "ClusterService::UpdateBadge disabled");
+            info!("Verified link badge");
 
-            // Validate the user badge
-            let valid_user = match user_badge {
-                UserBadge::Raw(proof) => self.__validate_user(proof),
-                UserBadge::Valid(valid_user) => valid_user,
-            };
+            // // Validate the user badge
+            // let valid_user = match user_badge {
+            //     UserBadge::Raw(proof) => self.__validate_user(proof),
+            //     UserBadge::Valid(valid_user) => valid_user,
+            // };
+            // info!("Verified user badge");
+
+            // // Open account and update badge
+            // let local_id = &valid_user.non_fungible_local_id();
+            // let mut user: User = valid_user.non_fungible().data();
+            // user.add_account(wrapper.cluster_address);
 
             // Open account and update badge
-            let local_id = &valid_user.non_fungible_local_id();
-            let mut user: User = valid_user.non_fungible().data();
+            let mut user: User = self.user_badge_manager.get_non_fungible_data::<User>(&user_id);
             user.add_account(wrapper.cluster_address);
 
             self.user_badge_manager
-                .update_non_fungible_data(local_id, "accounts_in", user.accounts_in);
-            self.user_badge_manager.update_non_fungible_data(local_id, "open", user.open);
+                .update_non_fungible_data(&user_id, "accounts_in", user.accounts_in);
+            self.user_badge_manager.update_non_fungible_data(&user_id, "open", user.open);
+
+            info!("Updated user badge");
         }
 
-        pub fn close_account(&self, link_badge: NonFungibleProof, user_badge: UserBadge) {
+        pub fn close_account(&self, link_badge: NonFungibleProof, user_id: NonFungibleLocalId) {
             // TODO: integrate own service
 
             // Validate the link
@@ -208,20 +217,13 @@ mod platform {
             let can_update_badge = wrapper.services.get_service(ClusterService::UpdateBadge).value;
             assert_eq!(can_update_badge, true, "ClusterService::UpdateBadge disabled");
 
-            // Validate the user badge
-            let valid_user = match user_badge {
-                UserBadge::Raw(proof) => self.__validate_user(proof),
-                UserBadge::Valid(valid_user) => valid_user,
-            };
-
-            // Open account and update badge
-            let local_id = &valid_user.non_fungible_local_id();
-            let mut user: User = valid_user.non_fungible().data();
+            // Close account and update badge
+            let mut user: User = self.user_badge_manager.get_non_fungible_data::<User>(&user_id);
             user.remove_account(wrapper.cluster_address);
 
             self.user_badge_manager
-                .update_non_fungible_data(local_id, "accounts_in", user.accounts_in);
-            self.user_badge_manager.update_non_fungible_data(local_id, "open", user.open);
+                .update_non_fungible_data(&user_id, "accounts_in", user.accounts_in);
+            self.user_badge_manager.update_non_fungible_data(&user_id, "open", user.open);
         }
 
         //] Private

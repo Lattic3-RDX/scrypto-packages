@@ -3,7 +3,7 @@ use scrypto::prelude::*;
 #[derive(ScryptoSbor, Debug)]
 pub enum UserBadge {
     Raw(NonFungibleProof),
-    Valid(CheckedNonFungibleProof),
+    Valid(NonFungibleLocalId),
 }
 
 #[derive(NonFungibleData, ScryptoSbor)]

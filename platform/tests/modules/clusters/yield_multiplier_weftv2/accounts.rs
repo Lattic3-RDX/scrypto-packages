@@ -11,6 +11,7 @@ fn test_valid_account_open_and_close() {
     let alice_account = runner.alice_account;
 
     // Instantiate a YieldMultiplierWeftCluster
+    println!("Instantiating MockWeftV2");
     let mut weftv2 = MockWeftV2::new(&mut runner);
     let ym_weftv2_cluster_factory = YMWeftV2ClusterFactory::new(&mut runner.ledger);
 
@@ -18,6 +19,7 @@ fn test_valid_account_open_and_close() {
     let supply = runner.faucet.usdt.address;
     let debt = runner.faucet.xwbtc.address;
 
+    println!("Instantiating YieldMultiplierWeftCluster");
     let cluster = ym_weftv2_cluster_factory.instantiate(
         &mut runner,
         owner_rule,
@@ -30,6 +32,7 @@ fn test_valid_account_open_and_close() {
     );
 
     // Link cluster to platform
+    println!("Linking cluster to platform");
     let manifest = ManifestBuilder::new()
         .lock_fee_from_faucet()
         .create_proof_from_account_of_amount(owner_account.address, platform.owner_badge, dec!(1))
@@ -54,6 +57,7 @@ fn test_valid_account_open_and_close() {
     let cdp_id = weftv2.mint_empty(&mut runner, alice_account);
 
     // Open an account
+    println!("Opening account");
     let manifest = ManifestBuilder::new()
         .lock_fee_from_faucet()
         .create_proof_from_account_of_non_fungibles(alice_account.address, platform.user_badge, vec![NonFungibleLocalId::Integer(0.into())])

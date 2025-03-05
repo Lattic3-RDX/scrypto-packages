@@ -132,19 +132,33 @@ mod yield_multiplier_weftv2_cluster {
         }
 
         //] Private
-        fn __linked_call<T: ScryptoDecode>(&self, method: &str, mut args: Vec<u8>) -> T {
+        fn __linked_call<T: ScryptoDecode>(&self, method: &str, args: Vec<u8>) -> T {
+            info!("Linked call");
+
             let link_local_id = self.link.non_fungible_local_id();
             let link_badge = self.link.create_proof_of_non_fungibles(&indexset![link_local_id]);
+            info!("Link badge");
 
             let platform: Global<AnyComponent> = self.platform_address.into();
-            let mut method_args = scrypto_args!(link_badge);
-            method_args.append(&mut args);
+            let mut method_args: Vec<u8> = scrypto_args!(link_badge);
+            args.iter().for_each(|arg| method_args.push(*arg));
+            info!("Method args: {:?}", method_args);
 
             platform.call_raw::<T>(method, method_args)
         }
 
+        fn __using_link<F: FnOnce(Global<AnyComponent>, NonFungibleProof)>(&self, func: F) {
+            let link_local_id = self.link.non_fungible_local_id();
+            let link_badge = self.link.create_proof_of_non_fungibles(&indexset![link_local_id]);
+
+            let platform: Global<AnyComponent> = self.platform_address.into();
+
+            func(platform, link_badge);
+        }
+
         //] ------------------ Cluster ----------------- */
         pub fn open_account(&mut self, user_badge: NonFungibleProof, cdp: NonFungibleBucket) {
+            info!("Called open_account");
             // Validate own link badge
             assert_eq!(self.link.amount(), dec!(1), "Cluster does not have a link badge");
 
@@ -154,15 +168,30 @@ mod yield_multiplier_weftv2_cluster {
 
             let cdp_valid = self.validate_cdp(cdp.non_fungible_local_id());
             assert!(cdp_valid, "Invalid CDP");
+            info!("Validated CDP");
 
             // Update the user's badge
-            let valid_user = UserBadge::Valid(self.__validate_user(user_badge));
-            self.__linked_call::<()>("open_account", scrypto_args!(valid_user));
+            info!("Pre-linked call");
+            let valid_user = self.__validate_user(user_badge);
+            let user_id = valid_user.non_fungible_local_id();
+            // self.__linked_call::<()>("open_account", scrypto_args!(valid_user));
+
+            info!("Linked call");
+
+            let link_local_id = self.link.non_fungible_local_id();
+            let link_badge = self.link.create_proof_of_non_fungibles(&indexset![link_local_id]);
+            info!("Link badge");
+
+            let platform: Global<AnyComponent> = self.platform_address.into();
+            platform.call_raw::<()>("open_account", scrypto_args!(link_badge, user_id));
+
+            info!("Post linked call");
 
             // Add the CDP to the cluster
             let cdp_local_id = cdp.non_fungible_local_id();
             let cdp_vault = NonFungibleVault::with_bucket(cdp);
             self.accounts.insert(cdp_local_id, cdp_vault);
+            info!("Inserted CDP");
         }
 
         pub fn close_account(&mut self, user_badge: NonFungibleProof) -> NonFungibleBucket {
