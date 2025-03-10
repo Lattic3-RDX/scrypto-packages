@@ -7,6 +7,7 @@ fn test_valid_link_and_unlink() {
     //] Arrange
     // Create a test runner and platform
     let (mut runner, platform) = Runner::new_base();
+    let owner_account = runner.owner_account;
 
     // Instantiate a YieldMultiplierWeftCluster
     let weftv2 = MockWeftV2::new(&mut runner);
@@ -29,27 +30,21 @@ fn test_valid_link_and_unlink() {
 
     //] Act & Assert
     // Link cluster to platform
-    let manifest = dump(
-        ManifestBuilder::new()
-            .lock_fee_from_faucet()
-            .create_proof_from_account_of_amount(runner.owner_account.address, platform.owner_badge, dec!(1))
-            .call_method(platform.component, "link_cluster", manifest_args!(cluster.component,)),
-        "link_cluster",
-    );
+    let manifest = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .create_proof_from_account_of_amount(owner_account.address, platform.owner_badge, dec!(1))
+        .call_method(platform.component, "link_cluster", manifest_args!(cluster.component,));
 
-    let receipt = runner.ledger.execute_manifest(manifest, vec![runner.owner_account.global_id()]);
+    let receipt = runner.exec_and_dump("link_cluster", manifest, &owner_account, Some("clusters/yield_multiplier_weftv2"));
     receipt.expect_commit_success();
 
     // Unlink cluster from platform
-    let manifest = dump(
-        ManifestBuilder::new()
-            .lock_fee_from_faucet()
-            .create_proof_from_account_of_amount(runner.owner_account.address, platform.owner_badge, dec!(1))
-            .call_method(platform.component, "unlink_cluster", manifest_args!(cluster.component,)),
-        "unlink_cluster",
-    );
+    let manifest = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .create_proof_from_account_of_amount(owner_account.address, platform.owner_badge, dec!(1))
+        .call_method(platform.component, "unlink_cluster", manifest_args!(cluster.component,));
 
-    let receipt = runner.ledger.execute_manifest(manifest, vec![runner.owner_account.global_id()]);
+    let receipt = runner.exec_and_dump("unlink_cluster", manifest, &owner_account, Some("clusters/yield_multiplier_weftv2"));
     receipt.expect_commit_success();
 }
 

@@ -1,5 +1,5 @@
 use crate::helpers::{faucet::Faucet, platform::PlatformFactory, prelude::*};
-use scrypto_test::prelude::*;
+use scrypto_test::{prelude::*, utils::dump_manifest_to_file_system};
 
 use super::platform::Platform;
 
@@ -53,5 +53,25 @@ impl Runner {
         let platform = runner.platform_factory.instantiate(&mut runner.ledger, runner.owner_account);
 
         (runner, platform)
+    }
+
+    pub fn exec_and_dump(&mut self, name: &str, manifest_builder: ManifestBuilder, account: &SimAccount, path: Option<&str>) -> TransactionReceipt {
+        let manifest = manifest_builder.build();
+
+        dump_manifest_to_file_system(
+            &manifest,
+            format!(
+                "./manifests{}",
+                match path {
+                    Some(path) => format!("/{}", path),
+                    None => "".to_string(),
+                }
+            ),
+            Some(name),
+            &NetworkDefinition::simulator(),
+        )
+        .err();
+
+        self.ledger.execute_manifest(manifest, vec![account.global_id()])
     }
 }

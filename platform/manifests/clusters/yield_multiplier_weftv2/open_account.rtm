@@ -19,13 +19,13 @@ CALL_METHOD
     "withdraw_non_fungibles"
     Address("resource_sim1nfrr0zdt53tcpwrpcaqny45tzc6ast85h83gsrfxrgywer4dan3hd2")
     Array<NonFungibleLocalId>(
-        NonFungibleLocalId("#1#")
+        NonFungibleLocalId("#0#")
     )
 ;
 TAKE_NON_FUNGIBLES_FROM_WORKTOP
     Address("resource_sim1nfrr0zdt53tcpwrpcaqny45tzc6ast85h83gsrfxrgywer4dan3hd2")
     Array<NonFungibleLocalId>(
-        NonFungibleLocalId("#1#")
+        NonFungibleLocalId("#0#")
     )
     Bucket("cdp_bucket")
 ;
