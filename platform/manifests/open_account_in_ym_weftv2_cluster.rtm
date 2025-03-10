@@ -1,0 +1,37 @@
+CALL_METHOD
+    Address("component_sim1cptxxxxxxxxxfaucetxxxxxxxxx000527798379xxxxxxxxxhkrefh")
+    "lock_fee"
+    Decimal("5000")
+;
+CALL_METHOD
+    Address("account_sim1cy8k0r7zhxw9gsn3pwgge6psmtdrkd5j5gy9nz0v5xx6a43xk89tts")
+    "create_proof_of_non_fungibles"
+    Address("resource_sim1nfkqghhkvs2zvx2tl8xcrpcz20lwprdc8t3298yjcnkqj5wuzkd2lu")
+    Array<NonFungibleLocalId>(
+        NonFungibleLocalId("#0#")
+    )
+;
+POP_FROM_AUTH_ZONE
+    Proof("user_badge")
+;
+CALL_METHOD
+    Address("account_sim1cy8k0r7zhxw9gsn3pwgge6psmtdrkd5j5gy9nz0v5xx6a43xk89tts")
+    "withdraw_non_fungibles"
+    Address("resource_sim1nfrr0zdt53tcpwrpcaqny45tzc6ast85h83gsrfxrgywer4dan3hd2")
+    Array<NonFungibleLocalId>(
+        NonFungibleLocalId("#1#")
+    )
+;
+TAKE_NON_FUNGIBLES_FROM_WORKTOP
+    Address("resource_sim1nfrr0zdt53tcpwrpcaqny45tzc6ast85h83gsrfxrgywer4dan3hd2")
+    Array<NonFungibleLocalId>(
+        NonFungibleLocalId("#1#")
+    )
+    Bucket("cdp_bucket")
+;
+CALL_METHOD
+    Address("component_sim1cr2d0nk926jk3mcu5r9dp5lquveadwl9muejsapumx0uu7upqp9gan")
+    "open_account"
+    Proof("user_badge")
+    Bucket("cdp_bucket")
+;

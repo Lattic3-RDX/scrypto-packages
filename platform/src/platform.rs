@@ -3,7 +3,7 @@ use crate::clusters::ClusterWrapper;
 use crate::services::cluster_services::ClusterService;
 use scrypto::prelude::*;
 use shared::links::Link;
-use shared::users::{User, UserBadge};
+use shared::users::User;
 
 /* ----------------- Blueprint ---------------- */
 #[blueprint]
@@ -177,26 +177,12 @@ mod platform {
         }
 
         pub fn open_account(&self, link_badge: NonFungibleProof, user_id: NonFungibleLocalId) {
-            // // TODO: integrate own service
-            info!("Open account");
+            // TODO: integrate own service
 
             // Validate the link
             let wrapper = self.__validate_link(link_badge);
             let can_update_badge = wrapper.services.get_service(ClusterService::UpdateBadge).value;
             assert_eq!(can_update_badge, true, "ClusterService::UpdateBadge disabled");
-            info!("Verified link badge");
-
-            // // Validate the user badge
-            // let valid_user = match user_badge {
-            //     UserBadge::Raw(proof) => self.__validate_user(proof),
-            //     UserBadge::Valid(valid_user) => valid_user,
-            // };
-            // info!("Verified user badge");
-
-            // // Open account and update badge
-            // let local_id = &valid_user.non_fungible_local_id();
-            // let mut user: User = valid_user.non_fungible().data();
-            // user.add_account(wrapper.cluster_address);
 
             // Open account and update badge
             let mut user: User = self.user_badge_manager.get_non_fungible_data::<User>(&user_id);
@@ -205,8 +191,6 @@ mod platform {
             self.user_badge_manager
                 .update_non_fungible_data(&user_id, "accounts_in", user.accounts_in);
             self.user_badge_manager.update_non_fungible_data(&user_id, "open", user.open);
-
-            info!("Updated user badge");
         }
 
         pub fn close_account(&self, link_badge: NonFungibleProof, user_id: NonFungibleLocalId) {

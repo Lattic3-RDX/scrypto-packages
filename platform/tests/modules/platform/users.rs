@@ -7,11 +7,13 @@ fn test_valid_mint_new_user_badge() {
     let (mut runner, platform) = Runner::new_base();
 
     //] Act
-    let manifest = ManifestBuilder::new()
-        .lock_fee_from_faucet()
-        .call_method(platform.component, "new_user", manifest_args!())
-        .deposit_batch(runner.alice_account.address, ManifestExpression::EntireWorktop)
-        .build();
+    let manifest = dump(
+        ManifestBuilder::new()
+            .lock_fee_from_faucet()
+            .call_method(platform.component, "new_user", manifest_args!())
+            .deposit_batch(runner.alice_account.address, ManifestExpression::EntireWorktop),
+        "new_user",
+    );
 
     //] Assert
     let receipt = runner.ledger.execute_manifest(manifest, vec![runner.alice_account.global_id()]);

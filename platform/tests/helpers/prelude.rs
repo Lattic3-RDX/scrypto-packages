@@ -1,5 +1,5 @@
 pub use super::runner::Runner;
-use scrypto_test::prelude::*;
+use scrypto_test::{prelude::*, utils::dump_manifest_to_file_system};
 use std::path::Path;
 
 //] ------------------ General ----------------- */
@@ -10,6 +10,14 @@ pub fn merge_path(input_path: &str) -> String {
     let path_string = path.to_str().unwrap();
 
     path_string.to_string()
+}
+
+pub fn dump(manifest_builder: ManifestBuilder, name: &str) -> TransactionManifestV1 {
+    let manifest = manifest_builder.build();
+
+    dump_manifest_to_file_system(&manifest, "./manifests", Some(name), &NetworkDefinition::simulator()).err();
+
+    manifest
 }
 
 //] ------------------ Account ----------------- */
