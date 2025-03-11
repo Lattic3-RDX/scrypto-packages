@@ -2,7 +2,6 @@
 use crate::execution::ExecutionTerms;
 use crate::weft::CDPData;
 use scrypto::prelude::*;
-use shared::users::UserBadge;
 use std::panic::catch_unwind;
 
 /* ----------------- Blueprint ---------------- */
@@ -17,7 +16,7 @@ mod yield_multiplier_weftv2_cluster {
         // Platform link
         platform_address: ComponentAddress,
         link: NonFungibleVault,
-        user_badge_address: ResourceAddress,
+        user_resource: ResourceAddress,
         // Cluster
         supply: ResourceAddress,
         debt: ResourceAddress,
@@ -34,7 +33,7 @@ mod yield_multiplier_weftv2_cluster {
             // Link
             platform_address: ComponentAddress,
             link_resource: ResourceAddress,
-            user_badge_address: ResourceAddress,
+            user_resource: ResourceAddress,
             // Cluster
             supply: ResourceAddress,
             debt: ResourceAddress,
@@ -97,7 +96,7 @@ mod yield_multiplier_weftv2_cluster {
                 component_address,
                 platform_address,
                 link: NonFungibleVault::new(link_resource),
-                user_badge_address,
+                user_resource,
                 supply,
                 debt,
                 accounts: KeyValueStore::new(),
@@ -244,7 +243,7 @@ mod yield_multiplier_weftv2_cluster {
 
         //] Private
         fn __validate_user(&self, user_badge: NonFungibleProof) -> CheckedNonFungibleProof {
-            let valid_user = user_badge.check_with_message(self.user_badge_address, "User badge not valid");
+            let valid_user = user_badge.check_with_message(self.user_resource, "User badge not valid");
             assert_eq!(valid_user.amount(), dec!(1), "Invalid user badge quantity");
 
             valid_user
@@ -287,13 +286,15 @@ mod yield_multiplier_weftv2_cluster {
 
             // Validate that all supply and debt assets are valid
             for (&resource, _) in cdp.collaterals.iter() {
+                info!("Collateral: {:?}, Supply: {:?}", resource, self.supply);
                 if resource != self.supply {
-                    info!("CDP with local_id {:?} has an invalid supply asset", local_id);
+                    info!("CDP with local_id {:?} has an invalid collateral asset", local_id);
                     return false;
                 }
             }
 
             for (&resource, _) in cdp.loans.iter() {
+                info!("Loan: {:?}, Debt: {:?}", resource, self.debt);
                 if resource != self.debt {
                     info!("CDP with local_id {:?} has an invalid debt asset", local_id);
                     return false;
