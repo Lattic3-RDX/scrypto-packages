@@ -1,5 +1,6 @@
 use crate::helpers::{faucet::Faucet, platform::PlatformFactory, prelude::*};
 use scrypto_test::{prelude::*, utils::dump_manifest_to_file_system};
+use std::{fs::create_dir_all, path::PathBuf};
 
 use super::platform::Platform;
 
@@ -55,7 +56,35 @@ impl Runner {
         (runner, platform)
     }
 
+    pub fn exec(&mut self, name: &str, manifest_builder: ManifestBuilder, account: &SimAccount, path: Option<&str>) -> TransactionReceipt {
+        // Build manifest
+        let manifest = manifest_builder.build();
+
+        // Execute and record manifest output
+        let receipt = self.ledger.execute_manifest(manifest, vec![account.global_id()]);
+
+        let path = PathBuf::from(
+            format!(
+                "./output{}",
+                match path {
+                    Some(path) => format!("/{}", path),
+                    None => "".to_string(),
+                }
+            )
+            .as_str(),
+        );
+
+        assert!(!path.is_file(), "Output path is a file");
+        create_dir_all(&path).unwrap();
+
+        let text = format!("{:?}", receipt);
+        std::fs::write(path.join(format!("{}.txt", name)), text).unwrap();
+
+        receipt
+    }
+
     pub fn exec_and_dump(&mut self, name: &str, manifest_builder: ManifestBuilder, account: &SimAccount, path: Option<&str>) -> TransactionReceipt {
+        // Build and dump manifest
         let manifest = manifest_builder.build();
 
         dump_manifest_to_file_system(
@@ -72,6 +101,26 @@ impl Runner {
         )
         .err();
 
-        self.ledger.execute_manifest(manifest, vec![account.global_id()])
+        // Execute and record manifest output
+        let receipt = self.ledger.execute_manifest(manifest, vec![account.global_id()]);
+
+        let path = PathBuf::from(
+            format!(
+                "./output{}",
+                match path {
+                    Some(path) => format!("/{}", path),
+                    None => "".to_string(),
+                }
+            )
+            .as_str(),
+        );
+
+        assert!(!path.is_file(), "Output path is a file");
+        create_dir_all(&path).unwrap();
+
+        let text = format!("{:?}", receipt);
+        std::fs::write(path.join(format!("{}.txt", name)), text).unwrap();
+
+        receipt
     }
 }

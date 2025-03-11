@@ -11,38 +11,40 @@ pub struct MockWeftV2 {
 
 impl MockWeftV2 {
     pub fn new(runner: &mut Runner) -> Self {
+        let owner_account = runner.owner_account;
+
         // Create CDP NFT
-        let manifest = ManifestBuilder::new()
-            .lock_fee_from_faucet()
-            .create_non_fungible_resource(
-                OwnerRole::None,
-                NonFungibleIdType::Integer,
-                true,
-                // Allow anyone to mint/burn, keep rest as default
-                NonFungibleResourceRoles {
-                    mint_roles: mint_roles! {
-                        minter         => rule!(allow_all);
-                        minter_updater => rule!(deny_all);
-                    },
-                    burn_roles: burn_roles! {
-                        burner         => rule!(allow_all);
-                        burner_updater => rule!(deny_all);
-                    },
-                    ..NonFungibleResourceRoles::default()
+        let manifest = ManifestBuilder::new().lock_fee_from_faucet().create_non_fungible_resource(
+            OwnerRole::None,
+            NonFungibleIdType::Integer,
+            true,
+            // Allow anyone to mint/burn, keep rest as default
+            NonFungibleResourceRoles {
+                mint_roles: mint_roles! {
+                    minter         => rule!(allow_all);
+                    minter_updater => rule!(deny_all);
                 },
-                metadata!(
-                    init {
-                        "name" => "Mock WeftV2 CDP", locked;
-                    }
-                ),
-                None::<IndexMap<NonFungibleLocalId, CDPData>>,
-            )
-            .build();
+                burn_roles: burn_roles! {
+                    burner         => rule!(allow_all);
+                    burner_updater => rule!(deny_all);
+                },
+                ..NonFungibleResourceRoles::default()
+            },
+            metadata!(
+                init {
+                    "name" => "Mock WeftV2 CDP", locked;
+                }
+            ),
+            None::<IndexMap<NonFungibleLocalId, CDPData>>,
+        );
 
         // Execute manifest
-        let receipt = runner
-            .ledger
-            .execute_manifest(manifest, vec![NonFungibleGlobalId::from_public_key(&runner.owner_account.public_key)]);
+        // let receipt = runner
+        //     .ledger
+        //     .execute_manifest(manifest, vec![NonFungibleGlobalId::from_public_key(&runner.owner_account.public_key)]);
+
+        let receipt = runner.exec_and_dump("create_mock_cdp", manifest, &owner_account, Some("integrations/weftv2"));
+        receipt.expect_commit_success();
 
         // Collect output
         let cdp = receipt.expect_commit_success().new_resource_addresses()[0];

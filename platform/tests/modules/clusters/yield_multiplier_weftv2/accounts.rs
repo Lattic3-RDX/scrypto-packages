@@ -321,14 +321,7 @@ fn test_invalid_open_account_without_link() {
 
     //] Act & Assert
     // Get a user badge
-    let manifest = ManifestBuilder::new()
-        .lock_fee_from_faucet()
-        .call_method(platform.component, "new_user", manifest_args!())
-        .deposit_batch(alice_account.address, ManifestExpression::EntireWorktop)
-        .build();
-
-    let receipt = runner.ledger.execute_manifest(manifest, vec![alice_account.global_id()]);
-    receipt.expect_commit_success();
+    platform.new_user(&mut runner, &alice_account);
 
     // Get an empty CDP
     let cdp_id = weftv2.mint_empty(&mut runner, alice_account);
@@ -342,10 +335,9 @@ fn test_invalid_open_account_without_link() {
         .take_non_fungibles_from_worktop(weftv2.cdp, vec![cdp_id], "cdp_bucket")
         .call_method_with_name_lookup(cluster.component, "open_account", |lookup| {
             (lookup.proof("user_badge"), lookup.bucket("cdp_bucket"))
-        })
-        .build();
+        });
 
-    let receipt = runner.ledger.execute_manifest(manifest, vec![alice_account.global_id()]);
+    let receipt = runner.exec("open_account", manifest, &alice_account, Some("clusters/yield_multiplier_weftv2"));
 
     // println!("{:?}\n", receipt);
     receipt.expect_commit_success();
@@ -380,25 +372,11 @@ fn test_invalid_account_double_open() {
     );
 
     // Link cluster to platform
-    let manifest = ManifestBuilder::new()
-        .lock_fee_from_faucet()
-        .create_proof_from_account_of_amount(owner_account.address, platform.owner_badge, dec!(1))
-        .call_method(platform.component, "link_cluster", manifest_args!(cluster.component,))
-        .build();
-
-    let receipt = runner.ledger.execute_manifest(manifest, vec![owner_account.global_id()]);
-    receipt.expect_commit_success();
+    platform.link(&mut runner, &owner_account, cluster.component);
 
     //] Act & Assert
     // Get a user badge
-    let manifest = ManifestBuilder::new()
-        .lock_fee_from_faucet()
-        .call_method(platform.component, "new_user", manifest_args!())
-        .deposit_batch(alice_account.address, ManifestExpression::EntireWorktop)
-        .build();
-
-    let receipt = runner.ledger.execute_manifest(manifest, vec![alice_account.global_id()]);
-    receipt.expect_commit_success();
+    platform.new_user(&mut runner, &alice_account);
 
     // Get an empty CDP
     let cdp_id = weftv2.mint_empty(&mut runner, alice_account);
@@ -412,10 +390,9 @@ fn test_invalid_account_double_open() {
         .take_non_fungibles_from_worktop(weftv2.cdp, vec![cdp_id], "cdp_bucket")
         .call_method_with_name_lookup(cluster.component, "open_account", |lookup| {
             (lookup.proof("user_badge"), lookup.bucket("cdp_bucket"))
-        })
-        .build();
+        });
 
-    let receipt = runner.ledger.execute_manifest(manifest, vec![alice_account.global_id()]);
+    let receipt = runner.exec("open_account", manifest, &alice_account, Some("clusters/yield_multiplier_weftv2"));
 
     // println!("{:?}\n", receipt);
     receipt.expect_commit_success();
@@ -432,10 +409,9 @@ fn test_invalid_account_double_open() {
         .take_non_fungibles_from_worktop(weftv2.cdp, vec![cdp_id], "cdp_bucket")
         .call_method_with_name_lookup(cluster.component, "open_account", |lookup| {
             (lookup.proof("user_badge"), lookup.bucket("cdp_bucket"))
-        })
-        .build();
+        });
 
-    let receipt = runner.ledger.execute_manifest(manifest, vec![alice_account.global_id()]);
+    let receipt = runner.exec("open_account", manifest, &alice_account, Some("clusters/yield_multiplier_weftv2"));
 
     // println!("{:?}\n", receipt);
     receipt.expect_commit_success();
@@ -482,10 +458,9 @@ fn test_invalid_close_account_without_open() {
         .create_proof_from_account_of_non_fungibles(alice_account.address, platform.user_badge, vec![NonFungibleLocalId::Integer(0.into())])
         .pop_from_auth_zone("user_badge")
         .call_method_with_name_lookup(cluster.component, "close_account", |lookup| (lookup.proof("user_badge"),))
-        .deposit_entire_worktop(alice_account.address)
-        .build();
+        .deposit_entire_worktop(alice_account.address);
 
-    let receipt = runner.ledger.execute_manifest(manifest, vec![alice_account.global_id()]);
+    let receipt = runner.exec("close_account", manifest, &alice_account, Some("clusters/yield_multiplier_weftv2"));
     receipt.expect_commit_success();
 }
 
@@ -542,14 +517,7 @@ fn test_invalid_account_open_and_close_when_unlinked() {
     receipt.expect_commit_success();
 
     // Unlink cluster from platform
-    let manifest = ManifestBuilder::new()
-        .lock_fee_from_faucet()
-        .create_proof_from_account_of_amount(owner_account.address, platform.owner_badge, dec!(1))
-        .call_method(platform.component, "unlink_cluster", manifest_args!(cluster.component,))
-        .build();
-
-    let receipt = runner.ledger.execute_manifest(manifest, vec![owner_account.global_id()]);
-    receipt.expect_commit_success();
+    platform.unlink(&mut runner, &owner_account, cluster.component);
 
     // Close account
     let manifest = ManifestBuilder::new()
@@ -559,6 +527,6 @@ fn test_invalid_account_open_and_close_when_unlinked() {
         .call_method_with_name_lookup(cluster.component, "close_account", |lookup| (lookup.proof("user_badge"),))
         .deposit_entire_worktop(alice_account.address);
 
-    let receipt = runner.exec_and_dump("close_account", manifest, &alice_account, Some("clusters/yield_multiplier_weftv2"));
+    let receipt = runner.exec("close_account", manifest, &alice_account, Some("clusters/yield_multiplier_weftv2"));
     receipt.expect_commit_success();
 }

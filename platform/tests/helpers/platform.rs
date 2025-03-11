@@ -54,10 +54,19 @@ impl Platform {
         let manifest = ManifestBuilder::new()
             .lock_fee_from_faucet()
             .create_proof_from_account_of_amount(account.address, self.owner_badge, dec!(1))
-            .call_method(self.component, "link_cluster", manifest_args!(cluster,))
-            .build();
+            .call_method(self.component, "link_cluster", manifest_args!(cluster,));
 
-        let receipt = runner.ledger.execute_manifest(manifest, vec![account.global_id()]);
+        let receipt = runner.exec_and_dump("link_cluster", manifest, &account, None);
+        receipt.expect_commit_success();
+    }
+
+    pub fn unlink(&self, runner: &mut Runner, account: &SimAccount, cluster: ComponentAddress) {
+        let manifest = ManifestBuilder::new()
+            .lock_fee_from_faucet()
+            .create_proof_from_account_of_amount(account.address, self.owner_badge, dec!(1))
+            .call_method(self.component, "unlink_cluster", manifest_args!(cluster,));
+
+        let receipt = runner.exec_and_dump("unlink_cluster", manifest, &account, None);
         receipt.expect_commit_success();
     }
 
@@ -65,10 +74,9 @@ impl Platform {
         let manifest = ManifestBuilder::new()
             .lock_fee_from_faucet()
             .call_method(self.component, "new_user", manifest_args!())
-            .deposit_batch(account.address, ManifestExpression::EntireWorktop)
-            .build();
+            .deposit_batch(account.address, ManifestExpression::EntireWorktop);
 
-        let receipt = runner.ledger.execute_manifest(manifest, vec![account.global_id()]);
+        let receipt = runner.exec("new_user", manifest, &account, None);
         receipt.expect_commit_success();
     }
 }
