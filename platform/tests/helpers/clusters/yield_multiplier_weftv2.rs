@@ -58,7 +58,7 @@ impl YMWeftV2ClusterFactory {
         println!("Execution Terms: {:?}\n", execution_terms,);
 
         // Return YMWeftV2Cluster
-        YMWeftV2Cluster { component, platform, link_badge, user_badge, supply, debt, cdp }
+        YMWeftV2Cluster { component, platform, link_badge, user_badge, supply, debt, execution_terms, cdp }
     }
 }
 
@@ -74,6 +74,7 @@ pub struct YMWeftV2Cluster {
     // Cluster
     pub supply: ResourceAddress,
     pub debt: ResourceAddress,
+    pub execution_terms: ResourceAddress,
     // WeftV2 integration
     pub cdp: ResourceAddress,
 }

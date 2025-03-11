@@ -195,10 +195,12 @@ mod yield_multiplier_weftv2_cluster {
             let valid_user = self.__validate_user(user_badge);
 
             let local_id = valid_user.non_fungible_local_id();
-            let cdp_bucket = self.accounts.remove(&local_id).expect("User has no open account").take_all();
+            let cdp_bucket = self.accounts.get_mut(&local_id).expect("User has no open account").take_all();
+
+            assert!(cdp_bucket.amount() == dec!(1), "Invalid CDP amount; must contain 1 NFT");
 
             // Mint the execution terms
-            let execution_terms = ExecutionTerms::new(local_id);
+            let execution_terms = ExecutionTerms::new(cdp_bucket.non_fungible_local_id(), local_id);
             let terms_bucket = self.execution_term_manager.mint_ruid_non_fungible(execution_terms);
 
             // Return CDP and execution terms
@@ -211,6 +213,7 @@ mod yield_multiplier_weftv2_cluster {
 
             // Validate the user's badge
             let valid_user = self.__validate_user(user_badge);
+            let user_id = valid_user.non_fungible_local_id();
 
             // Validate the execution terms
             assert_eq!(terms_bucket.amount(), dec!(1), "Invalid execution terms amount; must contain 1 NFT");
@@ -221,11 +224,13 @@ mod yield_multiplier_weftv2_cluster {
             );
 
             let term_data: ExecutionTerms = terms_bucket.non_fungible().data();
+            let cdp_id = cdp_bucket.non_fungible_local_id();
+
             assert_eq!(
-                term_data.user_local_id,
-                valid_user.non_fungible_local_id(),
+                term_data.user_local_id, user_id,
                 "Presented user badge does not match the execution terms"
             );
+            assert_eq!(term_data.cdp_id, cdp_id, "Presented CDP does not match the execution terms");
 
             // let local_id = terms_bucket.non_fungible_local_id();
             // let execution_terms: ExecutionTerms = self.execution_term_manager.get_non_fungible_data(&local_id);
@@ -236,6 +241,9 @@ mod yield_multiplier_weftv2_cluster {
 
             let cdp_valid = self.validate_cdp(cdp_bucket.non_fungible_local_id());
             assert!(cdp_valid, "Invalid CDP");
+
+            // Return the CDP
+            self.accounts.get_mut(&user_id).expect("User has no open account").put(cdp_bucket);
 
             // Burn the terms
             self.execution_term_manager.burn(terms_bucket);
