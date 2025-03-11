@@ -48,3 +48,27 @@ pub struct Platform {
     pub user_badge: ResourceAddress,
     pub link_badge: ResourceAddress,
 }
+
+impl Platform {
+    pub fn link(&self, runner: &mut Runner, account: &SimAccount, cluster: ComponentAddress) {
+        let manifest = ManifestBuilder::new()
+            .lock_fee_from_faucet()
+            .create_proof_from_account_of_amount(account.address, self.owner_badge, dec!(1))
+            .call_method(self.component, "link_cluster", manifest_args!(cluster,))
+            .build();
+
+        let receipt = runner.ledger.execute_manifest(manifest, vec![account.global_id()]);
+        receipt.expect_commit_success();
+    }
+
+    pub fn new_user(&self, runner: &mut Runner, account: &SimAccount) {
+        let manifest = ManifestBuilder::new()
+            .lock_fee_from_faucet()
+            .call_method(self.component, "new_user", manifest_args!())
+            .deposit_batch(account.address, ManifestExpression::EntireWorktop)
+            .build();
+
+        let receipt = runner.ledger.execute_manifest(manifest, vec![account.global_id()]);
+        receipt.expect_commit_success();
+    }
+}

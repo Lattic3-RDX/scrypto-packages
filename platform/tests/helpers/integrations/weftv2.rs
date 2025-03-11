@@ -54,8 +54,8 @@ impl MockWeftV2 {
         &mut self,
         runner: &mut Runner,
         target: SimAccount,
-        loans: Option<IndexMap<ResourceAddress, Decimal>>,
         collaterals: Option<IndexMap<ResourceAddress, Decimal>>,
+        loans: Option<IndexMap<ResourceAddress, Decimal>>,
         nft: bool,
     ) -> NonFungibleLocalId {
         // Convert loan mapping with decimal input to one with loan info
