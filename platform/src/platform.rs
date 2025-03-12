@@ -183,13 +183,13 @@ mod platform {
         pub fn open_account(&self, link_badge: NonFungibleProof, user_id: NonFungibleLocalId) {
             assert!(
                 self.services.get(PlatformService::OpenAccount).value,
-                "PlatformService::UpdateBadge disabled"
+                "PlatformService::OpenAccount disabled"
             );
 
             // Validate the link
             let wrapper = self.__validate_link(link_badge);
-            let can_update_badge = wrapper.services.get_service(ClusterService::UpdateBadge).value;
-            assert_eq!(can_update_badge, true, "ClusterService::UpdateBadge disabled");
+            let can_update_badge = wrapper.services.get_service(ClusterService::OpenAccount).value;
+            assert_eq!(can_update_badge, true, "ClusterService::OpenAccount disabled");
 
             // Open account and update badge
             let mut user: User = self.user_badge_manager.get_non_fungible_data::<User>(&user_id);
@@ -203,13 +203,13 @@ mod platform {
         pub fn close_account(&self, link_badge: NonFungibleProof, user_id: NonFungibleLocalId) {
             assert!(
                 self.services.get(PlatformService::CloseAccount).value,
-                "PlatformService::UpdateBadge disabled"
+                "PlatformService::CloseAccount disabled"
             );
 
             // Validate the link
             let wrapper = self.__validate_link(link_badge);
-            let can_update_badge = wrapper.services.get_service(ClusterService::UpdateBadge).value;
-            assert_eq!(can_update_badge, true, "ClusterService::UpdateBadge disabled");
+            let can_update_badge = wrapper.services.get_service(ClusterService::CloseAccount).value;
+            assert_eq!(can_update_badge, true, "ClusterService::CloseAccount disabled");
 
             // Close account and update badge
             let mut user: User = self.user_badge_manager.get_non_fungible_data::<User>(&user_id);

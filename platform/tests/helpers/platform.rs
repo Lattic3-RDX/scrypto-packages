@@ -80,3 +80,13 @@ impl Platform {
         receipt.expect_commit_success();
     }
 }
+
+#[derive(ScryptoSbor, Debug, Clone, Copy, ManifestSbor)]
+pub enum PlatformService {
+    MintBadge,
+    OpenAccount,
+    CloseAccount,
+    // AuthoriseExecution,
+    LinkCluster,
+    UnlinkCluster,
+}
