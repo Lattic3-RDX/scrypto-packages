@@ -13,7 +13,9 @@ mod platform {
     //] --------------- Scrypto Setup -------------- */
     enable_method_auth! {
         roles {
-            can_manage_links => updatable_by: [OWNER];
+            can_manage_links    => updatable_by: [OWNER];
+            can_update_services => updatable_by: [OWNER];
+            can_lock_services   => updatable_by: [OWNER];
         },
         methods {
             // User
@@ -21,13 +23,14 @@ mod platform {
             open_account  => PUBLIC; // Restricted by link badge
             close_account => PUBLIC; // Restricted by link badge
             // Links
-            link_cluster   => restrict_to: [can_manage_links, OWNER, SELF];
-            unlink_cluster => restrict_to: [can_manage_links, OWNER, SELF];
-            update_cluster_service => restrict_to: [can_manage_links, OWNER, SELF];
+            link_cluster   => restrict_to: [can_manage_links];
+            unlink_cluster => restrict_to: [can_manage_links];
+            update_cluster_service              => restrict_to: [can_update_services, can_lock_services];
+            update_cluster_service_and_set_lock => restrict_to: [can_lock_services];
             // State
             get_user_badge_address => PUBLIC;
-            update_service         => restrict_to: [OWNER, SELF];
-            update_service_and_set_lock => restrict_to: [OWNER, SELF];
+            update_service              => restrict_to: [can_update_services, can_lock_services];
+            update_service_and_set_lock => restrict_to: [can_lock_services];
         }
     }
 
@@ -131,7 +134,9 @@ mod platform {
 
             // Roles
             let component_roles = roles! {
-                can_manage_links => OWNER;
+                can_manage_links    => OWNER;
+                can_update_services => OWNER;
+                can_lock_services   => OWNER;
             };
 
             // Instantisation
@@ -178,7 +183,7 @@ mod platform {
 
         pub fn open_account(&self, link_badge: NonFungibleProof, user_id: NonFungibleLocalId) {
             assert!(
-                self.services.get(PlatformService::UpdateBadge).value,
+                self.services.get(PlatformService::OpenAccount).value,
                 "PlatformService::UpdateBadge disabled"
             );
 
@@ -198,7 +203,7 @@ mod platform {
 
         pub fn close_account(&self, link_badge: NonFungibleProof, user_id: NonFungibleLocalId) {
             assert!(
-                self.services.get(PlatformService::UpdateBadge).value,
+                self.services.get(PlatformService::CloseAccount).value,
                 "PlatformService::UpdateBadge disabled"
             );
 
@@ -272,6 +277,14 @@ mod platform {
                 .get_mut(&cluster_address)
                 .expect("Cluster with given address not linked");
             wrapper.services.update_service(service, value, false);
+        }
+
+        pub fn update_cluster_service_and_set_lock(&mut self, cluster_address: ComponentAddress, service: ClusterService, value: bool, locked: bool) {
+            let mut wrapper = self
+                .linked_clusters
+                .get_mut(&cluster_address)
+                .expect("Cluster with given address not linked");
+            wrapper.services.update_service(service, value, locked);
         }
 
         //] Private
