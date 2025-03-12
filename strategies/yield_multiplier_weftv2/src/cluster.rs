@@ -1,5 +1,6 @@
 /* ------------------ Imports ----------------- */
 use crate::execution::ExecutionTerms;
+use crate::services::{ClusterService, ClusterServiceManager};
 use crate::weft::CDPData;
 use scrypto::prelude::*;
 use std::panic::catch_unwind;
@@ -7,7 +8,6 @@ use std::panic::catch_unwind;
 /* ----------------- Blueprint ---------------- */
 #[blueprint]
 mod yield_multiplier_weftv2_cluster {
-
     //] --------------- Scrypto Setup -------------- */
     //] ------------- Cluster Blueprint ------------ */
     struct YieldMultiplierWeftV2Cluster {
@@ -22,6 +22,7 @@ mod yield_multiplier_weftv2_cluster {
         debt: ResourceAddress,
         accounts: KeyValueStore<NonFungibleLocalId, NonFungibleVault>,
         execution_term_manager: NonFungibleResourceManager,
+        services: ClusterServiceManager,
         // Integration
         cdp_manager: NonFungibleResourceManager,
     }
@@ -101,6 +102,7 @@ mod yield_multiplier_weftv2_cluster {
                 debt,
                 accounts: KeyValueStore::new(),
                 execution_term_manager,
+                services: ClusterServiceManager::new(),
                 cdp_manager: cdp_resource.into(),
             };
 
@@ -249,6 +251,11 @@ mod yield_multiplier_weftv2_cluster {
             self.execution_term_manager.burn(terms_bucket);
         }
 
+        //] Services
+        pub fn update_service(&mut self, service: ClusterService, value: bool) {
+            self.services.update(service, value, false);
+        }
+
         //] Private
         fn __validate_user(&self, user_badge: NonFungibleProof) -> CheckedNonFungibleProof {
             let valid_user = user_badge.check_with_message(self.user_resource, "User badge not valid");
@@ -294,7 +301,6 @@ mod yield_multiplier_weftv2_cluster {
 
             // Validate that all supply and debt assets are valid
             for (&resource, _) in cdp.collaterals.iter() {
-                info!("Collateral: {:?}, Supply: {:?}", resource, self.supply);
                 if resource != self.supply {
                     info!("CDP with local_id {:?} has an invalid collateral asset", local_id);
                     return false;
@@ -302,7 +308,6 @@ mod yield_multiplier_weftv2_cluster {
             }
 
             for (&resource, _) in cdp.loans.iter() {
-                info!("Loan: {:?}, Debt: {:?}", resource, self.debt);
                 if resource != self.debt {
                     info!("CDP with local_id {:?} has an invalid debt asset", local_id);
                     return false;
