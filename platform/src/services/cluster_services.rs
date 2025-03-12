@@ -15,12 +15,14 @@ pub struct ClusterServiceManager {
 
 impl ClusterServiceManager {
     pub fn new() -> Self {
-        Self { can_update_badge: ServiceValue { value: true } }
+        Self { can_update_badge: ServiceValue::yes() }
     }
 
-    pub fn update_service(&mut self, service: ClusterService, value: bool) {
+    pub fn update_service(&mut self, service: ClusterService, value: bool, locked: bool) {
+        let set = ServiceValue { value, locked };
+
         match service {
-            ClusterService::UpdateBadge => self.can_update_badge.value = value,
+            ClusterService::UpdateBadge => self.can_update_badge = set,
         };
     }
 

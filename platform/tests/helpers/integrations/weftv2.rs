@@ -28,6 +28,10 @@ impl MockWeftV2 {
                     burner         => rule!(allow_all);
                     burner_updater => rule!(deny_all);
                 },
+                non_fungible_data_update_roles: non_fungible_data_update_roles! {
+                    non_fungible_data_updater         => rule!(allow_all);
+                    non_fungible_data_updater_updater => rule!(deny_all);
+                },
                 ..NonFungibleResourceRoles::default()
             },
             metadata!(
@@ -61,27 +65,14 @@ impl MockWeftV2 {
         nft: bool,
     ) -> NonFungibleLocalId {
         // Convert loan mapping with decimal input to one with loan info
-        let loans: IndexMap<ResourceAddress, LoanInfo> = match loans {
-            Some(loans) => loans
-                .iter()
-                .map(|(&address, &units)| (address, LoanInfo { units, config_version: 1 }))
-                .collect(),
+        let loans = match loans {
+            Some(loans) => Self::map_loans(loans),
             None => IndexMap::new(),
         };
 
         // Convert collateral mapping with decimal input to one with collateral info
-        let collaterals: IndexMap<ResourceAddress, CollateralInfo> = match collaterals {
-            Some(collaterals) => collaterals
-                .iter()
-                .map(|(&address, &amount)| {
-                    let info = CollateralInfo {
-                        amount,
-                        config_version: CollateralConfigVersion { entry_version: 1, efficiency_mode: EfficiencyMode::None },
-                    };
-
-                    (address, info)
-                })
-                .collect(),
+        let collaterals = match collaterals {
+            Some(collaterals) => Self::map_collaterals(collaterals),
             None => IndexMap::new(),
         };
 
@@ -128,6 +119,27 @@ impl MockWeftV2 {
 
     pub fn mint_empty(&mut self, runner: &mut Runner, target: SimAccount) -> NonFungibleLocalId {
         self.mint(runner, target, None, None, false)
+    }
+
+    pub fn map_collaterals(collaterals: IndexMap<ResourceAddress, Decimal>) -> IndexMap<ResourceAddress, CollateralInfo> {
+        collaterals
+            .iter()
+            .map(|(&address, &amount)| {
+                let info = CollateralInfo {
+                    amount,
+                    config_version: CollateralConfigVersion { entry_version: 1, efficiency_mode: EfficiencyMode::None },
+                };
+
+                (address, info)
+            })
+            .collect()
+    }
+
+    pub fn map_loans(loans: IndexMap<ResourceAddress, Decimal>) -> IndexMap<ResourceAddress, LoanInfo> {
+        loans
+            .iter()
+            .map(|(&address, &units)| (address, LoanInfo { units, config_version: 1 }))
+            .collect()
     }
 }
 

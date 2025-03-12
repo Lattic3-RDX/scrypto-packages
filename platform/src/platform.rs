@@ -1,6 +1,7 @@
 /* ------------------ Imports ----------------- */
 use crate::clusters::ClusterWrapper;
 use crate::services::cluster_services::ClusterService;
+use crate::services::platform_services::{PlatformService, PlatformServiceManager};
 use scrypto::prelude::*;
 use shared::links::Link;
 use shared::users::User;
@@ -8,6 +9,7 @@ use shared::users::User;
 /* ----------------- Blueprint ---------------- */
 #[blueprint]
 mod platform {
+
     //] --------------- Scrypto Setup -------------- */
     enable_method_auth! {
         roles {
@@ -24,6 +26,8 @@ mod platform {
             update_cluster_service => restrict_to: [can_manage_links, OWNER, SELF];
             // State
             get_user_badge_address => PUBLIC;
+            update_service         => restrict_to: [OWNER, SELF];
+            update_service_and_set_lock => restrict_to: [OWNER, SELF];
         }
     }
 
@@ -34,6 +38,8 @@ mod platform {
         // User badges
         user_badge_manager: NonFungibleResourceManager,
         user_count: u64,
+        // Operating services
+        services: PlatformServiceManager,
         // Links
         link_badge_manager: NonFungibleResourceManager,
         linked_clusters: KeyValueStore<ComponentAddress, ClusterWrapper>,
@@ -41,13 +47,6 @@ mod platform {
     }
 
     impl Platform {
-        //] --------------- Instantiation -------------- */
-        // Instantiate with custom rules and badges
-        pub fn instantiate_custom() -> () {}
-
-        // Instantiate with an existing owner badge; mint new badges
-        pub fn instantiate_with_owner() -> () {}
-
         // Instantiate and mint a new owner/admin/etc. badge
         pub fn instantiate() -> (Global<Platform>, FungibleBucket) {
             // Reserve component address
@@ -68,7 +67,8 @@ mod platform {
             let owner_access_rule: AccessRule = rule!(require(owner_badge.resource_address()));
             let owner_role: OwnerRole = OwnerRole::Fixed(owner_access_rule.clone());
 
-            //] User badges
+            // let admin_badge_manager:
+
             let user_badge_manager: NonFungibleResourceManager = ResourceBuilder::new_integer_non_fungible::<User>(owner_role.clone())
                 .metadata(metadata! {init {
                     "name"            => "L3//User Badge", locked;
@@ -89,7 +89,6 @@ mod platform {
                 })
                 .create_with_no_initial_supply();
 
-            //] Links
             let link_badge_manager: NonFungibleResourceManager = ResourceBuilder::new_integer_non_fungible::<Link>(owner_role.clone())
                 .metadata(metadata! {init {
                     "name"            => "L3//Link", locked;
@@ -142,6 +141,8 @@ mod platform {
                 // User badges
                 user_badge_manager,
                 user_count: 0,
+                // Operating services
+                services: PlatformServiceManager::new(),
                 // Links
                 link_badge_manager,
                 linked_clusters: KeyValueStore::new(),
@@ -161,9 +162,8 @@ mod platform {
 
         //] ------------------- User ------------------- */
         pub fn new_user(&mut self) -> NonFungibleBucket {
-            // TODO: integrate own service
-
             // Ensure that a new user badge can be minted
+            assert!(self.services.get(PlatformService::MintBadge).value, "PlatformService::MintBadge disabled");
             assert!(self.user_count < u64::MAX, "Cannot mint more user badges; at U64 MAX");
 
             // Create empty user badge
@@ -177,7 +177,10 @@ mod platform {
         }
 
         pub fn open_account(&self, link_badge: NonFungibleProof, user_id: NonFungibleLocalId) {
-            // TODO: integrate own service
+            assert!(
+                self.services.get(PlatformService::UpdateBadge).value,
+                "PlatformService::UpdateBadge disabled"
+            );
 
             // Validate the link
             let wrapper = self.__validate_link(link_badge);
@@ -194,7 +197,10 @@ mod platform {
         }
 
         pub fn close_account(&self, link_badge: NonFungibleProof, user_id: NonFungibleLocalId) {
-            // TODO: integrate own service
+            assert!(
+                self.services.get(PlatformService::UpdateBadge).value,
+                "PlatformService::UpdateBadge disabled"
+            );
 
             // Validate the link
             let wrapper = self.__validate_link(link_badge);
@@ -219,8 +225,12 @@ mod platform {
         }
 
         //] ------------------- Links ------------------ */
-        // RESTRICT can_link/component
         pub fn link_cluster(&mut self, cluster_address: ComponentAddress) {
+            assert!(
+                self.services.get(PlatformService::LinkCluster).value,
+                "PlatformService::LinkCluster disabled"
+            );
+
             // Ensure that the cluster hasn't already been linked
             assert!(self.linked_clusters.get(&cluster_address).is_none(), "Cluster already linked");
 
@@ -244,18 +254,24 @@ mod platform {
         }
 
         pub fn unlink_cluster(&mut self, cluster_address: ComponentAddress) {
+            assert!(
+                self.services.get(PlatformService::UnlinkCluster).value,
+                "PlatformService::UnlinkCluster disabled"
+            );
+
             // let _wrapper = self.linked_clusters.get(&cluster_address).ok_or("Cluster already linked".to_string());
             assert!(self.linked_clusters.get(&cluster_address).is_some(), "Cluster not linked");
 
             self.linked_clusters.remove(&cluster_address);
         }
 
+        //] Services
         pub fn update_cluster_service(&mut self, cluster_address: ComponentAddress, service: ClusterService, value: bool) {
             let mut wrapper = self
                 .linked_clusters
                 .get_mut(&cluster_address)
                 .expect("Cluster with given address not linked");
-            wrapper.services.update_service(service, value);
+            wrapper.services.update_service(service, value, false);
         }
 
         //] Private
@@ -279,6 +295,15 @@ mod platform {
         //] ------------------- State ------------------ */
         pub fn get_user_badge_address(&self) -> ResourceAddress {
             self.user_badge_manager.address()
+        }
+
+        //] Services
+        pub fn update_service(&mut self, service: PlatformService, value: bool) {
+            self.services.update(service, value, false);
+        }
+
+        pub fn update_service_and_set_lock(&mut self, service: PlatformService, value: bool, locked: bool) {
+            self.services.update(service, value, locked);
         }
     }
 }
