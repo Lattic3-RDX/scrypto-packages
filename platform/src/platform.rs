@@ -9,7 +9,6 @@ use shared::users::User;
 /* ----------------- Blueprint ---------------- */
 #[blueprint]
 mod platform {
-
     //] --------------- Scrypto Setup -------------- */
     enable_method_auth! {
         roles {

@@ -9,6 +9,28 @@ use std::panic::catch_unwind;
 #[blueprint]
 mod yield_multiplier_weftv2_cluster {
     //] --------------- Scrypto Setup -------------- */
+    enable_method_auth! {
+        roles {
+            can_collect_fees    => updatable_by: [OWNER];
+            can_update_services => updatable_by: [OWNER];
+            can_lock_services   => updatable_by: [OWNER];
+        },
+        methods {
+            // Links
+            handle_link => PUBLIC;
+            // Accounts
+            open_account    => PUBLIC;
+            close_account   => PUBLIC;
+            start_execution => PUBLIC;
+            end_execution   => PUBLIC;
+            // Internal
+            update_service              => restrict_to: [can_update_services, can_lock_services];
+            update_service_and_set_lock => restrict_to: [can_lock_services];
+            // WeftV2 Integration
+            validate_cdp => PUBLIC;
+        }
+    }
+
     //] ------------- Cluster Blueprint ------------ */
     struct YieldMultiplierWeftV2Cluster {
         // Authorisation
@@ -88,9 +110,11 @@ mod yield_multiplier_weftv2_cluster {
             };
 
             // Roles
-            // let component_roles = roles! {
-            //     platform => platform_access_rule.clone();
-            // };
+            let component_roles = roles! {
+                can_collect_fees    => OWNER;
+                can_update_services => OWNER;
+                can_lock_services   => OWNER;
+            };
 
             // Instantisation
             let initial_state = Self {
@@ -109,7 +133,7 @@ mod yield_multiplier_weftv2_cluster {
             let component: Global<YieldMultiplierWeftV2Cluster> = initial_state
                 .instantiate()
                 .prepare_to_globalize(owner_role)
-                // .roles(component_roles)
+                .roles(component_roles)
                 .metadata(component_metadata)
                 .with_address(address_reservation)
                 .globalize();
@@ -119,6 +143,9 @@ mod yield_multiplier_weftv2_cluster {
 
         //] ------------------- Links ------------------ */
         pub fn handle_link(&mut self, bucket: NonFungibleBucket) {
+            // Check operating service
+            assert!(self.services.get(ClusterService::Link).value, "ClusterService::Link disabled");
+
             // Sanity checks
             assert_eq!(self.link.amount(), dec!(0), "Platform already linked");
             assert_eq!(bucket.amount(), dec!(1), "Invalid bucket amount; must contain 1 link badge");
@@ -134,6 +161,10 @@ mod yield_multiplier_weftv2_cluster {
 
         //] Private
         fn __with_link<F: FnOnce(Global<AnyComponent>, NonFungibleProof)>(&self, func: F) {
+            // Check operating service
+            assert!(self.services.get(ClusterService::CallLinked).value, "ClusterService::CallLinked disabled");
+
+            // Arrange call
             let link_local_id = self.link.non_fungible_local_id();
             let link_badge = self.link.create_proof_of_non_fungibles(&indexset![link_local_id]);
 
@@ -144,6 +175,12 @@ mod yield_multiplier_weftv2_cluster {
 
         //] ------------------ Cluster ----------------- */
         pub fn open_account(&mut self, user_badge: NonFungibleProof, cdp: NonFungibleBucket) {
+            // Check operating service
+            assert!(
+                self.services.get(ClusterService::OpenAccount).value,
+                "ClusterService::OpenAccount disabled"
+            );
+
             // Validate own link badge
             assert_eq!(self.link.amount(), dec!(1), "Cluster does not have a link badge");
 
@@ -172,6 +209,12 @@ mod yield_multiplier_weftv2_cluster {
         }
 
         pub fn close_account(&mut self, user_badge: NonFungibleProof) -> NonFungibleBucket {
+            // Check operating service
+            assert!(
+                self.services.get(ClusterService::CloseAccount).value,
+                "ClusterService::CloseAccount disabled"
+            );
+
             // Validate own link badge
             assert_eq!(self.link.amount(), dec!(1), "Cluster does not have a link badge");
 
@@ -190,6 +233,9 @@ mod yield_multiplier_weftv2_cluster {
         // pub fn get_account_info(&self, local_id: NonFungibleLocalId) {}
 
         pub fn start_execution(&mut self, user_badge: NonFungibleProof) -> (NonFungibleBucket, NonFungibleBucket) {
+            // Check operating service
+            assert!(self.services.get(ClusterService::Execute).value, "ClusterService::Execute disabled");
+
             // Validate own link badge
             assert_eq!(self.link.amount(), dec!(1), "Cluster does not have a link badge");
 
@@ -254,6 +300,10 @@ mod yield_multiplier_weftv2_cluster {
         //] Services
         pub fn update_service(&mut self, service: ClusterService, value: bool) {
             self.services.update(service, value, false);
+        }
+
+        pub fn update_service_and_set_lock(&mut self, service: ClusterService, value: bool, locked: bool) {
+            self.services.update(service, value, locked);
         }
 
         //] Private
