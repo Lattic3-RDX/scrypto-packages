@@ -90,3 +90,9 @@ pub enum PlatformService {
     LinkCluster,
     UnlinkCluster,
 }
+
+#[derive(ScryptoSbor, Debug, Clone, Copy, ManifestSbor)]
+pub enum PlatformClusterService {
+    OpenAccount,
+    CloseAccount,
+}

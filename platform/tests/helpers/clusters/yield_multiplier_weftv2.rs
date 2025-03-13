@@ -78,3 +78,13 @@ pub struct YMWeftV2Cluster {
     // WeftV2 integration
     pub cdp: ResourceAddress,
 }
+
+#[derive(ScryptoSbor, Debug, Clone, Copy, ManifestSbor)]
+pub enum YMWeftV2ClusterService {
+    OpenAccount,
+    CloseAccount,
+    Execute,
+    Link,
+    Unlink,
+    CallLinked,
+}

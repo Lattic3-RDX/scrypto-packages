@@ -1,6 +1,6 @@
 /* ------------------ Imports ----------------- */
 use crate::clusters::ClusterWrapper;
-use crate::services::cluster_services::ClusterService;
+use crate::services::cluster_services::{ClusterService, ClusterServiceManager};
 use crate::services::platform_services::{PlatformService, PlatformServiceManager};
 use scrypto::prelude::*;
 use shared::links::Link;
@@ -8,7 +8,24 @@ use shared::users::User;
 
 /* ----------------- Blueprint ---------------- */
 #[blueprint]
+#[types(
+    ComponentAddress,
+    ResourceAddress,
+    NonFungibleResourceManager,
+    NonFungibleLocalId,
+    Decimal,
+    u64,
+    Link,
+    User,
+    ClusterWrapper,
+    BlueprintId,
+    PlatformServiceManager,
+    PlatformService,
+    ClusterServiceManager,
+    ClusterService
+)]
 mod platform {
+
     //] --------------- Scrypto Setup -------------- */
     enable_method_auth! {
         roles {
