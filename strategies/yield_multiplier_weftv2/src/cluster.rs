@@ -2,7 +2,7 @@
 use crate::execution::ExecutionTerms;
 use crate::info::{AccountInfo, ClusterInfo, EventAccountInfo, EventClusterInfo};
 use crate::services::{ClusterService, ClusterServiceManager};
-use crate::weft::{CDPData, CollateralInfo};
+use crate::weft::CDPData;
 use scrypto::prelude::*;
 use std::panic::catch_unwind;
 
@@ -10,7 +10,6 @@ use std::panic::catch_unwind;
 #[blueprint]
 #[events(EventAccountInfo, EventClusterInfo)]
 mod yield_multiplier_weftv2_cluster {
-
     //] --------------- Scrypto Setup -------------- */
     enable_method_auth! {
         roles {
@@ -274,8 +273,14 @@ mod yield_multiplier_weftv2_cluster {
 
             // Fetch and parse the CDP
             let cdp: CDPData = self.cdp_manager.get_non_fungible_data::<CDPData>(&local_id);
-            let supply = cdp.collaterals.get(&self.supply).unwrap_or(CollateralInfo {}).amount;
-            let debt = cdp.loans.get(&self.debt).unwrap_or(dec!(0)).units;
+            let supply = match cdp.collaterals.get(&self.supply) {
+                Some(collateral) => collateral.amount,
+                None => dec!(0),
+            };
+            let debt = match cdp.loans.get(&self.debt) {
+                Some(loan) => loan.units,
+                None => dec!(0),
+            };
 
             // Construct and emit the account info
             let info = AccountInfo { cdp_id: local_id, supply, debt };

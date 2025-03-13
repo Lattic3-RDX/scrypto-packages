@@ -145,3 +145,49 @@ fn test_valid_get_account_info() {
 
     receipt.expect_commit_success();
 }
+
+#[test]
+#[should_panic]
+fn test_invalid_get_account_info_without_account() {
+    //] Arrange
+    // Create a test runner and platform
+    let (mut runner, platform) = Runner::new_base();
+    let owner_account = runner.owner_account;
+    let alice_account = runner.alice_account;
+
+    // Instantiate a YieldMultiplierWeftCluster
+    let weftv2 = MockWeftV2::new(&mut runner);
+    let ym_weftv2_cluster_factory = YMWeftV2ClusterFactory::new(&mut runner.ledger);
+
+    let owner_rule = rule!(require(platform.owner_badge));
+    let supply = runner.faucet.usdt.address;
+    let debt = runner.faucet.xwbtc.address;
+
+    let cluster = ym_weftv2_cluster_factory.instantiate(
+        &mut runner,
+        owner_rule,
+        platform.component,
+        platform.link_badge,
+        platform.user_badge,
+        supply,
+        debt,
+        weftv2.cdp,
+    );
+
+    // Link cluster to platform
+    platform.link(&mut runner, &owner_account, cluster.component);
+
+    // Get a user badge
+    platform.new_user(&mut runner, &alice_account);
+
+    //] Act & Assert
+    // Get account info
+    let manifest = ManifestBuilder::new().lock_fee_from_faucet().call_method(
+        cluster.component,
+        "get_account_info",
+        manifest_args!(NonFungibleLocalId::Integer(0.into()),),
+    );
+    let receipt = runner.exec_and_dump("get_account_info", manifest, &owner_account, Some("clusters/yield_multiplier_weftv2"));
+
+    receipt.expect_commit_success();
+}
