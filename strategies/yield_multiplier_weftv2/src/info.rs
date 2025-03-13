@@ -22,7 +22,10 @@ pub struct EventClusterInfo {
 pub struct AccountInfo {
     pub cdp_id: NonFungibleLocalId,
     pub supply: Decimal,
+    pub supply_value: Decimal,
     pub debt: Decimal,
+    pub debt_value: Decimal,
+    pub health: Decimal,
 }
 
 #[derive(ScryptoSbor, ScryptoEvent, Debug, Clone)]

@@ -10,6 +10,8 @@ use std::panic::catch_unwind;
 #[blueprint]
 #[events(EventAccountInfo, EventClusterInfo)]
 mod yield_multiplier_weftv2_cluster {
+    use crate::weft::CDPHealthChecker;
+
     //] --------------- Scrypto Setup -------------- */
     enable_method_auth! {
         roles {
@@ -267,23 +269,30 @@ mod yield_multiplier_weftv2_cluster {
             cdp_bucket
         }
 
-        pub fn get_account_info(&self, local_id: NonFungibleLocalId) -> AccountInfo {
-            // let cdp_vault = self.accounts.get(&local_id).expect("User has no open account");
-            assert!(self.accounts.get(&local_id).is_some(), "User has no open account");
+        pub fn get_account_info(&self, weft_address: ComponentAddress, local_id: NonFungibleLocalId) -> AccountInfo {
+            let cdp_id = self.accounts.get(&local_id).expect("User has no open account").non_fungible_local_id();
+            let weft: Global<AnyComponent> = weft_address.into();
 
             // Fetch and parse the CDP
-            let cdp: CDPData = self.cdp_manager.get_non_fungible_data::<CDPData>(&local_id);
-            let supply = match cdp.collaterals.get(&self.supply) {
+            let cdp = weft.call_raw::<CDPHealthChecker>("get_cdp", scrypto_args!(indexset![cdp_id]));
+            let supply = match cdp.collateral_positions.get(&self.supply) {
                 Some(collateral) => collateral.amount,
                 None => dec!(0),
             };
-            let debt = match cdp.loans.get(&self.debt) {
-                Some(loan) => loan.units,
+            let debt = match cdp.collateral_positions.get(&self.debt) {
+                Some(loan) => loan.amount,
                 None => dec!(0),
             };
 
             // Construct and emit the account info
-            let info = AccountInfo { cdp_id: local_id, supply, debt };
+            let info = AccountInfo {
+                cdp_id: local_id,
+                supply,
+                supply_value: cdp.total_collateral_value,
+                debt,
+                debt_value: cdp.total_loan_value,
+                health: cdp.health_ltv,
+            };
 
             Runtime::emit_event(EventAccountInfo { info: info.clone() });
             info
