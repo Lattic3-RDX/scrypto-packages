@@ -5,7 +5,7 @@ use crate::helpers::{clusters::yield_multiplier_weftv2::YMWeftV2ClusterFactory, 
 use scrypto_test::prelude::*;
 
 #[test]
-fn test_valid_link_and_unlink() {
+fn test_valid_link_and_unlink_with_recall() {
     //] Arrange
     // Create a test runner and platform
     let (mut runner, platform) = Runner::new_base();
@@ -35,6 +35,22 @@ fn test_valid_link_and_unlink() {
     platform.link(&mut runner, &owner_account, cluster.component);
 
     // Unlink cluster from platform
+    let vaults = runner.ledger.get_component_vaults(cluster.component, platform.link_badge);
+
+    assert_eq!(vaults.len(), 1, "Cluster has more than 1 link badge vault");
+    assert!(vaults[0].is_internal_non_fungible_vault(), "Not a non-fungible vault");
+
+    let vault = InternalAddress::new_or_panic(vaults[0].into());
+
+    let manifest = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .create_proof_from_account_of_amount(owner_account.address, platform.owner_badge, dec!(1))
+        .recall(vault, 1)
+        .deposit_entire_worktop(owner_account.address);
+    let receipt = runner.exec_and_dump("recall_link_badge", manifest, &owner_account, None);
+
+    receipt.expect_commit_success();
+
     platform.unlink(&mut runner, &owner_account, cluster.component);
 }
 
