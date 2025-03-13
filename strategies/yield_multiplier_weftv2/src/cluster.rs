@@ -1,13 +1,16 @@
 /* ------------------ Imports ----------------- */
 use crate::execution::ExecutionTerms;
+use crate::info::{AccountInfo, ClusterInfo, EventAccountInfo, EventClusterInfo};
 use crate::services::{ClusterService, ClusterServiceManager};
-use crate::weft::CDPData;
+use crate::weft::{CDPData, CollateralInfo};
 use scrypto::prelude::*;
 use std::panic::catch_unwind;
 
 /* ----------------- Blueprint ---------------- */
 #[blueprint]
+#[events(EventAccountInfo, EventClusterInfo)]
 mod yield_multiplier_weftv2_cluster {
+
     //] --------------- Scrypto Setup -------------- */
     enable_method_auth! {
         roles {
@@ -19,10 +22,12 @@ mod yield_multiplier_weftv2_cluster {
             // Links
             handle_link => PUBLIC;
             // Accounts
-            open_account    => PUBLIC;
-            close_account   => PUBLIC;
-            start_execution => PUBLIC;
-            end_execution   => PUBLIC;
+            open_account     => PUBLIC;
+            close_account    => PUBLIC;
+            get_cluster_info => PUBLIC;
+            get_account_info => PUBLIC;
+            start_execution  => PUBLIC;
+            end_execution    => PUBLIC;
             // Internal
             update_service              => restrict_to: [can_update_services, can_lock_services];
             update_service_and_set_lock => restrict_to: [can_lock_services];
@@ -43,6 +48,7 @@ mod yield_multiplier_weftv2_cluster {
         supply: ResourceAddress,
         debt: ResourceAddress,
         accounts: KeyValueStore<NonFungibleLocalId, NonFungibleVault>,
+        account_count: u64,
         execution_term_manager: NonFungibleResourceManager,
         services: ClusterServiceManager,
         // Integration
@@ -125,6 +131,7 @@ mod yield_multiplier_weftv2_cluster {
                 supply,
                 debt,
                 accounts: KeyValueStore::new(),
+                account_count: 0,
                 execution_term_manager,
                 services: ClusterServiceManager::new(),
                 cdp_manager: cdp_resource.into(),
@@ -174,12 +181,37 @@ mod yield_multiplier_weftv2_cluster {
         }
 
         //] ------------------ Cluster ----------------- */
+        pub fn get_cluster_info(&self) -> ClusterInfo {
+            let info = ClusterInfo {
+                platform_address: self.platform_address,
+                cluster_address: self.component_address,
+                linked: self.link.amount() > dec!(0),
+                account_count: self.account_count,
+                supply_res: self.supply,
+                debt_res: self.debt,
+            };
+
+            Runtime::emit_event(EventClusterInfo { info: info.clone() });
+            info
+        }
+
+        //] Services
+        pub fn update_service(&mut self, service: ClusterService, value: bool) {
+            self.services.update(service, value, false);
+        }
+
+        pub fn update_service_and_set_lock(&mut self, service: ClusterService, value: bool, locked: bool) {
+            self.services.update(service, value, locked);
+        }
+
+        //] ----------------- Accounts ----------------- */
         pub fn open_account(&mut self, user_badge: NonFungibleProof, cdp: NonFungibleBucket) {
             // Check operating service
             assert!(
                 self.services.get(ClusterService::OpenAccount).value,
                 "ClusterService::OpenAccount disabled"
             );
+            assert!(self.account_count <= u64::MAX, "Accounts at u64::MAX");
 
             // Validate own link badge
             assert_eq!(self.link.amount(), dec!(1), "Cluster does not have a link badge");
@@ -206,6 +238,9 @@ mod yield_multiplier_weftv2_cluster {
             let cdp_local_id = cdp.non_fungible_local_id();
             let cdp_vault = NonFungibleVault::with_bucket(cdp);
             self.accounts.insert(cdp_local_id, cdp_vault);
+
+            // Update the account count
+            self.account_count += 1;
         }
 
         pub fn close_account(&mut self, user_badge: NonFungibleProof) -> NonFungibleBucket {
@@ -214,6 +249,7 @@ mod yield_multiplier_weftv2_cluster {
                 self.services.get(ClusterService::CloseAccount).value,
                 "ClusterService::CloseAccount disabled"
             );
+            assert!(self.account_count > 0, "No accounts to close");
 
             // Validate own link badge
             assert_eq!(self.link.amount(), dec!(1), "Cluster does not have a link badge");
@@ -227,10 +263,26 @@ mod yield_multiplier_weftv2_cluster {
             let local_id = valid_user.non_fungible_local_id();
             let cdp_bucket = self.accounts.get_mut(&local_id).expect("User has no open account").take_all();
 
+            self.account_count -= 1;
+
             cdp_bucket
         }
 
-        // pub fn get_account_info(&self, local_id: NonFungibleLocalId) {}
+        pub fn get_account_info(&self, local_id: NonFungibleLocalId) -> AccountInfo {
+            // let cdp_vault = self.accounts.get(&local_id).expect("User has no open account");
+            assert!(self.accounts.get(&local_id).is_some(), "User has no open account");
+
+            // Fetch and parse the CDP
+            let cdp: CDPData = self.cdp_manager.get_non_fungible_data::<CDPData>(&local_id);
+            let supply = cdp.collaterals.get(&self.supply).unwrap_or(CollateralInfo {}).amount;
+            let debt = cdp.loans.get(&self.debt).unwrap_or(dec!(0)).units;
+
+            // Construct and emit the account info
+            let info = AccountInfo { cdp_id: local_id, supply, debt };
+
+            Runtime::emit_event(EventAccountInfo { info: info.clone() });
+            info
+        }
 
         pub fn start_execution(&mut self, user_badge: NonFungibleProof) -> (NonFungibleBucket, NonFungibleBucket) {
             // Check operating service
@@ -295,15 +347,6 @@ mod yield_multiplier_weftv2_cluster {
 
             // Burn the terms
             self.execution_term_manager.burn(terms_bucket);
-        }
-
-        //] Services
-        pub fn update_service(&mut self, service: ClusterService, value: bool) {
-            self.services.update(service, value, false);
-        }
-
-        pub fn update_service_and_set_lock(&mut self, service: ClusterService, value: bool, locked: bool) {
-            self.services.update(service, value, locked);
         }
 
         //] Private
