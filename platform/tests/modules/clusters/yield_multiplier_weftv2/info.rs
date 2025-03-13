@@ -85,6 +85,7 @@ fn test_valid_get_cluster_info_unlinked() {
 
 /* ------------------ Account ----------------- */
 #[test]
+#[ignore = "Requires mainnet"]
 fn test_valid_get_account_info() {
     //] Arrange
     // Create a test runner and platform
@@ -148,6 +149,7 @@ fn test_valid_get_account_info() {
 
 #[test]
 #[should_panic]
+#[ignore = "Requires mainnet"]
 fn test_invalid_get_account_info_without_account() {
     //] Arrange
     // Create a test runner and platform
