@@ -9,7 +9,7 @@ pub enum ClusterService {
     CloseAccount,
     Execute,
     Link,
-    Unlink,
+    // Unlink,
     CallLinked,
 }
 
@@ -19,7 +19,7 @@ pub struct ClusterServiceManager {
     close_account: ServiceValue,
     execute: ServiceValue,
     link: ServiceValue,
-    unlink: ServiceValue,
+    // unlink: ServiceValue,
     call_linked: ServiceValue,
 }
 
@@ -30,7 +30,7 @@ impl ClusterServiceManager {
             close_account: ServiceValue::yes(),
             execute: ServiceValue::yes(),
             link: ServiceValue::yes(),
-            unlink: ServiceValue::yes(),
+            // unlink: ServiceValue::yes(),
             call_linked: ServiceValue::yes(),
         }
     }
@@ -43,7 +43,7 @@ impl ClusterServiceManager {
             ClusterService::CloseAccount => self.close_account = set,
             ClusterService::Execute => self.execute = set,
             ClusterService::Link => self.link = set,
-            ClusterService::Unlink => self.unlink = set,
+            // ClusterService::Unlink => self.unlink = set,
             ClusterService::CallLinked => self.call_linked = set,
         };
     }
@@ -54,7 +54,7 @@ impl ClusterServiceManager {
             ClusterService::CloseAccount => self.close_account,
             ClusterService::Execute => self.execute,
             ClusterService::Link => self.link,
-            ClusterService::Unlink => self.unlink,
+            // ClusterService::Unlink => self.unlink,
             ClusterService::CallLinked => self.call_linked,
         }
     }
