@@ -1,6 +1,6 @@
 /* ------------------ Imports ----------------- */
 use scrypto::prelude::*;
-use shared::services::ServiceValue;
+use shared::services::{ServiceValue, SetLock};
 
 /* ------------ Operating Services ------------ */
 #[derive(ScryptoSbor, Debug, Clone, Copy)]
@@ -35,27 +35,25 @@ impl ClusterServiceManager {
         }
     }
 
-    pub fn update(&mut self, service: ClusterService, value: bool, locked: bool) {
-        let set = ServiceValue { value, locked };
-
+    pub fn update(&mut self, service: ClusterService, value: bool, lock: SetLock) {
         match service {
-            ClusterService::OpenAccount => self.open_account = set,
-            ClusterService::CloseAccount => self.close_account = set,
-            ClusterService::Execute => self.execute = set,
-            ClusterService::Link => self.link = set,
-            // ClusterService::Unlink => self.unlink = set,
-            ClusterService::CallLinked => self.call_linked = set,
+            ClusterService::OpenAccount => self.open_account.set(value, lock),
+            ClusterService::CloseAccount => self.close_account.set(value, lock),
+            ClusterService::Execute => self.execute.set(value, lock),
+            ClusterService::Link => self.link.set(value, lock),
+            // ClusterService::Unlink => self.unlink.set(value, lock),
+            ClusterService::CallLinked => self.call_linked.set(value, lock),
         };
     }
 
-    pub fn get(&self, service: ClusterService) -> ServiceValue {
+    pub fn get(&self, service: ClusterService) -> bool {
         match service {
-            ClusterService::OpenAccount => self.open_account,
-            ClusterService::CloseAccount => self.close_account,
-            ClusterService::Execute => self.execute,
-            ClusterService::Link => self.link,
-            // ClusterService::Unlink => self.unlink,
-            ClusterService::CallLinked => self.call_linked,
+            ClusterService::OpenAccount => self.open_account.value,
+            ClusterService::CloseAccount => self.close_account.value,
+            ClusterService::Execute => self.execute.value,
+            ClusterService::Link => self.link.value,
+            // ClusterService::Unlink => self.unlink.value,
+            ClusterService::CallLinked => self.call_linked.value,
         }
     }
 }

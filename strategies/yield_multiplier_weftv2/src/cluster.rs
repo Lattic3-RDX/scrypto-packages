@@ -4,6 +4,7 @@ use crate::info::{AccountInfo, ClusterInfo, EventAccountInfo, EventClusterInfo};
 use crate::services::{ClusterService, ClusterServiceManager};
 use crate::weft::{CDPData, CDPHealthChecker};
 use scrypto::prelude::*;
+use shared::services::SetLock;
 use std::panic::catch_unwind;
 
 /* ----------------- Blueprint ---------------- */
@@ -21,16 +22,16 @@ mod yield_multiplier_weftv2_cluster {
         methods {
             // Links
             handle_link => PUBLIC;
+            // Cluster
+            get_cluster_info => PUBLIC;
+            update_service              => restrict_to: [can_update_services, can_lock_services];
+            update_service_and_set_lock => restrict_to: [can_lock_services];
             // Accounts
             open_account     => PUBLIC;
             close_account    => PUBLIC;
-            get_cluster_info => PUBLIC;
             get_account_info => PUBLIC;
             start_execution  => PUBLIC;
             end_execution    => PUBLIC;
-            // Internal
-            update_service              => restrict_to: [can_update_services, can_lock_services];
-            update_service_and_set_lock => restrict_to: [can_lock_services];
             // WeftV2 Integration
             validate_cdp => PUBLIC;
         }
@@ -56,6 +57,19 @@ mod yield_multiplier_weftv2_cluster {
     }
 
     impl YieldMultiplierWeftV2Cluster {
+        /// Instantiates a new `YieldMultiplierWeftV2Cluster` component with the specified configuration.
+        ///
+        /// # Parameters
+        /// - `owner_rule`: Access rule defining the owner of the component.
+        /// - `platform_address`: The component address of the platform to which this cluster links.
+        /// - `link_resource`: Resource address for the link badge used to link this cluster to a platform.
+        /// - `user_resource`: Resource address for the user badge required for user operations.
+        /// - `supply`: Resource address for the supply asset of the cluster.
+        /// - `debt`: Resource address for the debt asset of the cluster.
+        /// - `cdp_resource`:Resource address of the WeftV2 CDP NFT.
+        ///
+        /// # Returns
+        /// A globally accessible `YieldMultiplierWeftV2Cluster` component instance.
         pub fn instantiate(
             // Authorisation
             owner_rule: AccessRule,
@@ -149,9 +163,18 @@ mod yield_multiplier_weftv2_cluster {
         }
 
         //] ------------------- Links ------------------ */
+        /// Handles the reception of a link badge. Initiated by the platform's link_cluster() method.
+        ///
+        /// # Parameters
+        /// - `bucket`: The bucket containing the link badge.
+        ///
+        /// # Panics
+        /// - If the Link service is disabled
+        /// - If the link badge is invalid (amount != 1, incorrect resource address)
+        /// - If the cluster is already linked
         pub fn handle_link(&mut self, bucket: NonFungibleBucket) {
             // Check operating service
-            assert!(self.services.get(ClusterService::Link).value, "ClusterService::Link disabled");
+            assert!(self.services.get(ClusterService::Link), "ClusterService::Link disabled");
 
             // Sanity checks
             assert_eq!(self.link.amount(), dec!(0), "Platform already linked");
@@ -167,9 +190,18 @@ mod yield_multiplier_weftv2_cluster {
         }
 
         //] Private
+        /// Call a method on the platform; uses a closure with |platform, link_badge_proof|.
+        /// Closure is used due to issues with appending generic scyrpto_args to an already-encoded link badge.
+        ///
+        /// # Parameters
+        /// - `func`: Closure with |platform, link_badge_proof|
+        ///
+        /// # Panics
+        /// - If the cluster is not linked
+        /// - If the CallLinked service is disabled
         fn __with_link<F: FnOnce(Global<AnyComponent>, NonFungibleProof)>(&self, func: F) {
-            // Check operating service
-            assert!(self.services.get(ClusterService::CallLinked).value, "ClusterService::CallLinked disabled");
+            assert!(self.link.amount() > dec!(0), "Cluster not linked");
+            assert!(self.services.get(ClusterService::CallLinked), "ClusterService::CallLinked disabled");
 
             // Arrange call
             let link_local_id = self.link.non_fungible_local_id();
@@ -181,6 +213,19 @@ mod yield_multiplier_weftv2_cluster {
         }
 
         //] ------------------ Cluster ----------------- */
+        /// Returns general information about the cluster.
+        ///
+        /// # Emits
+        /// - `EventClusterInfo`: contains the same information as the returned `ClusterInfo` struct.
+        ///
+        /// # Returns
+        /// A `ClusterInfo` struct containing the following information:
+        /// - `platform_address`: The component address of the platform to which this cluster links.
+        /// - `cluster_address`: The component address of the cluster.
+        /// - `linked`: A boolean indicating whether the cluster is linked.
+        /// - `account_count`: The number of accounts open on the cluster.
+        /// - `supply_res`: The resource address of the supply asset.
+        /// - `debt_res`: The resource address of the debt asset.
         pub fn get_cluster_info(&self) -> ClusterInfo {
             let info = ClusterInfo {
                 platform_address: self.platform_address,
@@ -196,21 +241,26 @@ mod yield_multiplier_weftv2_cluster {
         }
 
         //] Services
+        /// Updates a cluster service without setting lock.
+        ///
+        /// # Parameters
+        /// - `service`: The service to update.
+        /// - `value`: The value to set the service to.
+        ///
+        /// # Panics
+        /// - If the service is not enabled in the blueprint
         pub fn update_service(&mut self, service: ClusterService, value: bool) {
-            self.services.update(service, value, false);
+            self.services.update(service, value, SetLock::None);
         }
 
         pub fn update_service_and_set_lock(&mut self, service: ClusterService, value: bool, locked: bool) {
-            self.services.update(service, value, locked);
+            self.services.update(service, value, SetLock::Update(locked));
         }
 
         //] ----------------- Accounts ----------------- */
         pub fn open_account(&mut self, user_badge: NonFungibleProof, cdp: NonFungibleBucket) {
             // Check operating service
-            assert!(
-                self.services.get(ClusterService::OpenAccount).value,
-                "ClusterService::OpenAccount disabled"
-            );
+            assert!(self.services.get(ClusterService::OpenAccount), "ClusterService::OpenAccount disabled");
             assert!(self.account_count <= u64::MAX, "Accounts at u64::MAX");
 
             // Validate own link badge
@@ -245,10 +295,7 @@ mod yield_multiplier_weftv2_cluster {
 
         pub fn close_account(&mut self, user_badge: NonFungibleProof) -> NonFungibleBucket {
             // Check operating service
-            assert!(
-                self.services.get(ClusterService::CloseAccount).value,
-                "ClusterService::CloseAccount disabled"
-            );
+            assert!(self.services.get(ClusterService::CloseAccount), "ClusterService::CloseAccount disabled");
             assert!(self.account_count > 0, "No accounts to close");
 
             // Validate own link badge
@@ -299,7 +346,7 @@ mod yield_multiplier_weftv2_cluster {
 
         pub fn start_execution(&mut self, user_badge: NonFungibleProof) -> (NonFungibleBucket, NonFungibleBucket) {
             // Check operating service
-            assert!(self.services.get(ClusterService::Execute).value, "ClusterService::Execute disabled");
+            assert!(self.services.get(ClusterService::Execute), "ClusterService::Execute disabled");
 
             // Validate own link badge
             assert_eq!(self.link.amount(), dec!(1), "Cluster does not have a link badge");

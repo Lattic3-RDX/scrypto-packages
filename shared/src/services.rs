@@ -14,4 +14,23 @@ impl ServiceValue {
     pub fn no() -> Self {
         Self { value: false, locked: false }
     }
+
+    pub fn set(&mut self, value: bool, lock: SetLock) {
+        match lock {
+            SetLock::None => {
+                assert!(!self.locked);
+                self.value = value;
+            }
+            SetLock::Update(lock) => {
+                self.value = value;
+                self.locked = lock;
+            }
+        }
+    }
+}
+
+#[derive(ScryptoSbor, Debug, PartialEq, Clone, Copy)]
+pub enum SetLock {
+    None,
+    Update(bool),
 }
