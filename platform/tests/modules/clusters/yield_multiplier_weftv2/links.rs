@@ -55,6 +55,55 @@ fn test_valid_link_and_unlink_with_recall() {
 }
 
 #[test]
+fn test_valid_link_multiple() {
+    //] Arrange
+    // Create a test runner and platform
+    let (mut runner, platform) = Runner::new_base();
+    let owner_account = runner.owner_account;
+
+    // Instantiate a YieldMultiplierWeftCluster
+    let weftv2 = MockWeftV2::new(&mut runner);
+    let ym_weftv2_cluster_factory = YMWeftV2ClusterFactory::new(&mut runner.ledger);
+
+    let owner_rule = rule!(require(platform.owner_badge));
+
+    let supply = runner.faucet.usdt.address;
+    let debt = runner.faucet.xwbtc.address;
+    let cluster_1 = ym_weftv2_cluster_factory.instantiate(
+        &mut runner,
+        owner_rule.clone(),
+        platform.component,
+        platform.link_badge,
+        platform.user_badge,
+        supply,
+        debt,
+        weftv2.cdp,
+    );
+
+    let supply = XRD;
+    let debt = runner.faucet.usdc.address;
+    let cluster_2 = ym_weftv2_cluster_factory.instantiate(
+        &mut runner,
+        owner_rule,
+        platform.component,
+        platform.link_badge,
+        platform.user_badge,
+        supply,
+        debt,
+        weftv2.cdp,
+    );
+
+    //] Act & Assert
+    // Link cluster to platform
+    platform.link(&mut runner, &owner_account, cluster_1.component);
+    platform.link(&mut runner, &owner_account, cluster_2.component);
+
+    // Unlink cluster from platform
+    platform.unlink(&mut runner, &owner_account, cluster_1.component);
+    platform.unlink(&mut runner, &owner_account, cluster_2.component);
+}
+
+#[test]
 #[should_panic]
 fn test_invalid_double_link() {
     //] Arrange
@@ -268,15 +317,15 @@ fn test_invalid_link_when_cluster_service_disabled() {
 //     // Create a test runner and platform
 //     let (mut runner, platform) = Runner::new_base();
 //     let owner_account = runner.owner_account;
-
+//
 //     // Instantiate a YieldMultiplierWeftCluster
 //     let weftv2 = MockWeftV2::new(&mut runner);
 //     let ym_weftv2_cluster_factory = YMWeftV2ClusterFactory::new(&mut runner.ledger);
-
+//
 //     let owner_rule = rule!(require(platform.owner_badge));
 //     let supply = runner.faucet.usdt.address;
 //     let debt = runner.faucet.xwbtc.address;
-
+//
 //     let cluster = ym_weftv2_cluster_factory.instantiate(
 //         &mut runner,
 //         owner_rule,
@@ -287,11 +336,11 @@ fn test_invalid_link_when_cluster_service_disabled() {
 //         debt,
 //         weftv2.cdp,
 //     );
-
+//
 //     //] Act & Assert
 //     // Link cluster to platform
 //     platform.link(&mut runner, &owner_account, cluster.component);
-
+//
 //     // Disable the Unlink service
 //     let manifest = ManifestBuilder::new()
 //         .lock_fee_from_faucet()
@@ -307,9 +356,9 @@ fn test_invalid_link_when_cluster_service_disabled() {
 //         &owner_account,
 //         Some("clusters/yield_multiplier_weftv2"),
 //     );
-
+//
 //     receipt.expect_commit_success();
-
+//
 //     // Unlink cluster from platform
 //     platform.unlink(&mut runner, &owner_account, cluster.component);
 // }

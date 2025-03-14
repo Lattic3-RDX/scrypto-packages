@@ -25,7 +25,6 @@ use shared::users::User;
     ClusterService
 )]
 mod platform {
-
     //] --------------- Scrypto Setup -------------- */
     enable_method_auth! {
         roles {

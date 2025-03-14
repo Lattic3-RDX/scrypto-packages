@@ -2,7 +2,7 @@
 use crate::execution::ExecutionTerms;
 use crate::info::{AccountInfo, ClusterInfo, EventAccountInfo, EventClusterInfo};
 use crate::services::{ClusterService, ClusterServiceManager};
-use crate::weft::CDPData;
+use crate::weft::{CDPData, CDPHealthChecker};
 use scrypto::prelude::*;
 use std::panic::catch_unwind;
 
@@ -10,7 +10,6 @@ use std::panic::catch_unwind;
 #[blueprint]
 #[events(EventAccountInfo, EventClusterInfo)]
 mod yield_multiplier_weftv2_cluster {
-    use crate::weft::CDPHealthChecker;
 
     //] --------------- Scrypto Setup -------------- */
     enable_method_auth! {
