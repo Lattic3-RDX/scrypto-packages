@@ -9,13 +9,28 @@ use std::panic::catch_unwind;
 
 /* ----------------- Blueprint ---------------- */
 #[blueprint]
+#[types(
+    ComponentAddress,
+    ResourceAddress,
+    NonFungibleResourceManager,
+    NonFungibleLocalId,
+    Decimal,
+    u64,
+    BlueprintId,
+    ClusterServiceManager,
+    ClusterService,
+    AccountInfo,
+    ClusterInfo,
+    CDPData,
+    CDPHealthChecker,
+    SetLock
+)]
 #[events(EventAccountInfo, EventClusterInfo)]
 mod yield_multiplier_weftv2_cluster {
-
     //] --------------- Scrypto Setup -------------- */
     enable_method_auth! {
         roles {
-            can_collect_fees    => updatable_by: [OWNER];
+            can_manage_fees     => updatable_by: [OWNER];
             can_update_services => updatable_by: [OWNER];
             can_lock_services   => updatable_by: [OWNER];
         },
@@ -26,6 +41,8 @@ mod yield_multiplier_weftv2_cluster {
             get_cluster_info => PUBLIC;
             update_service              => restrict_to: [can_update_services, can_lock_services];
             update_service_and_set_lock => restrict_to: [can_lock_services];
+            set_fee_percentage => restrict_to: [can_manage_fees];
+            collect_fees       => restrict_to: [can_manage_fees];
             // Accounts
             open_account     => PUBLIC;
             close_account    => PUBLIC;
@@ -52,7 +69,10 @@ mod yield_multiplier_weftv2_cluster {
         account_count: u64,
         execution_term_manager: NonFungibleResourceManager,
         services: ClusterServiceManager,
+        fee_rate: Decimal,
+        fee_vault: FungibleVault,
         // Integration
+        weft_market_address: ComponentAddress,
         cdp_manager: NonFungibleResourceManager,
     }
 
@@ -81,6 +101,7 @@ mod yield_multiplier_weftv2_cluster {
             supply: ResourceAddress,
             debt: ResourceAddress,
             // Integration
+            weft_market_address: ComponentAddress,
             cdp_resource: ResourceAddress,
         ) -> Global<YieldMultiplierWeftV2Cluster> {
             // Reserve component address
@@ -122,16 +143,18 @@ mod yield_multiplier_weftv2_cluster {
                     metadata_locker_updater => rule!(deny_all);
                 },
                 init {
-                    "name"            => "L3//Cluster - Yield Multiplier V1@WeftV2", locked;
-                    "description"     => "Lattic3 cluster component for the 'Yield Multiplier v1' strategy, built on top of the Weft V2 lending platform.", locked;
-                    // "dapp_definition" => dapp_definition_address, updatable;
+                    "name"            => "L3//Yield Multiplier - WeftV2", locked;
+                    "description"     => "Lattic3 cluster component for the Yield Multiplier strategy, built on top of the Weft V2 lending platform.", locked;
+                    "supply"          => supply, locked;
+                    "debt"            => debt, locked;
                     "execution_terms" => execution_term_manager.address(), locked;
+                    // "dapp_definition" => dapp_definition_address, updatable;
                 }
             };
 
             // Roles
             let component_roles = roles! {
-                can_collect_fees    => OWNER;
+                can_manage_fees     => OWNER;
                 can_update_services => OWNER;
                 can_lock_services   => OWNER;
             };
@@ -148,6 +171,9 @@ mod yield_multiplier_weftv2_cluster {
                 account_count: 0,
                 execution_term_manager,
                 services: ClusterServiceManager::new(),
+                fee_rate: dec!(0.015),
+                fee_vault: FungibleVault::new(XRD),
+                weft_market_address,
                 cdp_manager: cdp_resource.into(),
             };
 
@@ -257,6 +283,15 @@ mod yield_multiplier_weftv2_cluster {
             self.services.update(service, value, SetLock::Update(locked));
         }
 
+        //] Fees
+        pub fn set_fee_percentage(&mut self, fee_percentage: Decimal) {
+            self.fee_rate = fee_percentage;
+        }
+
+        pub fn collect_fees(&mut self) -> FungibleBucket {
+            self.fee_vault.take_all()
+        }
+
         //] ----------------- Accounts ----------------- */
         pub fn open_account(&mut self, user_badge: NonFungibleProof, cdp: NonFungibleBucket) {
             // Check operating service
@@ -282,12 +317,12 @@ mod yield_multiplier_weftv2_cluster {
                 "User already has an account"
             );
 
-            self.__with_link(|platform, link_badge| platform.call_raw("open_account", scrypto_args!(link_badge, user_id)));
+            self.__with_link(|platform, link_badge| platform.call_raw("open_account", scrypto_args!(link_badge, user_id.clone())));
 
             // Add the CDP to the cluster
-            let cdp_local_id = cdp.non_fungible_local_id();
+            // let cdp_local_id = cdp.non_fungible_local_id();
             let cdp_vault = NonFungibleVault::with_bucket(cdp);
-            self.accounts.insert(cdp_local_id, cdp_vault);
+            self.accounts.insert(user_id, cdp_vault);
 
             // Update the account count
             self.account_count += 1;
@@ -315,17 +350,17 @@ mod yield_multiplier_weftv2_cluster {
             cdp_bucket
         }
 
-        pub fn get_account_info(&self, weft_address: ComponentAddress, local_id: NonFungibleLocalId) -> AccountInfo {
+        pub fn get_account_info(&self, local_id: NonFungibleLocalId) -> AccountInfo {
             let cdp_id = self.accounts.get(&local_id).expect("User has no open account").non_fungible_local_id();
-            let weft: Global<AnyComponent> = weft_address.into();
+            let weft_market: Global<AnyComponent> = self.weft_market_address.into();
 
             // Fetch and parse the CDP
-            let cdp = weft.call_raw::<CDPHealthChecker>("get_cdp", scrypto_args!(indexset![cdp_id]));
-            let supply = match cdp.collateral_positions.get(&self.supply) {
+            let cdp_health = weft_market.call_raw::<CDPHealthChecker>("get_cdp", scrypto_args!(indexset![cdp_id]));
+            let supply = match cdp_health.collateral_positions.get(&self.supply) {
                 Some(collateral) => collateral.amount,
                 None => dec!(0),
             };
-            let debt = match cdp.collateral_positions.get(&self.debt) {
+            let debt = match cdp_health.collateral_positions.get(&self.debt) {
                 Some(loan) => loan.amount,
                 None => dec!(0),
             };
@@ -334,10 +369,10 @@ mod yield_multiplier_weftv2_cluster {
             let info = AccountInfo {
                 cdp_id: local_id,
                 supply,
-                supply_value: cdp.total_collateral_value,
+                supply_value: cdp_health.total_collateral_value,
                 debt,
-                debt_value: cdp.total_loan_value,
-                health: cdp.health_ltv,
+                debt_value: cdp_health.total_loan_value,
+                health: cdp_health.health_ltv,
             };
 
             Runtime::emit_event(EventAccountInfo { info: info.clone() });
@@ -359,15 +394,28 @@ mod yield_multiplier_weftv2_cluster {
 
             assert!(cdp_bucket.amount() == dec!(1), "Invalid CDP amount; must contain 1 NFT");
 
+            // Get the CDPHealthChecker for the CDP and get the net total value (liquidity)
+            let cdp_id = cdp_bucket.non_fungible_local_id();
+            let weft_market: Global<AnyComponent> = self.weft_market_address.into();
+            let cdp_health = weft_market.call_raw::<CDPHealthChecker>("get_cdp", scrypto_args!(indexset![cdp_id]));
+
+            let liquidity = cdp_health.total_collateral_value.checked_sub(cdp_health.total_loan_value).unwrap();
+
             // Mint the execution terms
-            let execution_terms = ExecutionTerms::new(cdp_bucket.non_fungible_local_id(), local_id);
+            let execution_terms = ExecutionTerms::new(cdp_bucket.non_fungible_local_id(), local_id, liquidity);
             let terms_bucket = self.execution_term_manager.mint_ruid_non_fungible(execution_terms);
 
             // Return CDP and execution terms
             (cdp_bucket, terms_bucket)
         }
 
-        pub fn end_execution(&mut self, user_badge: NonFungibleProof, cdp_bucket: NonFungibleBucket, terms_bucket: NonFungibleBucket) {
+        pub fn end_execution(
+            &mut self,
+            user_badge: NonFungibleProof,
+            cdp_bucket: NonFungibleBucket,
+            terms_bucket: NonFungibleBucket,
+            mut fee_payment: FungibleBucket,
+        ) -> FungibleBucket {
             // Validate own link badge
             assert_eq!(self.link.amount(), dec!(1), "Cluster does not have a link badge");
 
@@ -399,14 +447,33 @@ mod yield_multiplier_weftv2_cluster {
             assert_eq!(cdp_bucket.amount(), dec!(1), "Invalid CDP amount; must contain 1 NFT");
             assert_eq!(cdp_bucket.resource_address(), self.cdp_manager.address(), "Invalid CDP resource address");
 
-            let cdp_valid = self.validate_cdp(cdp_bucket.non_fungible_local_id());
+            let cdp_id = cdp_bucket.non_fungible_local_id();
+            let cdp_valid = self.validate_cdp(cdp_id.clone());
             assert!(cdp_valid, "Invalid CDP");
+
+            // Get the CDPHealthChecker for the CDP and get the net total value (liquidity)
+            let weft_market: Global<AnyComponent> = self.weft_market_address.into();
+            let cdp_health = weft_market.call_raw::<CDPHealthChecker>("get_cdp", scrypto_args!(indexset![cdp_id]));
+
+            let liquidity = cdp_health.total_collateral_value.checked_sub(cdp_health.total_loan_value).unwrap();
+            let liquidity_delta = liquidity.checked_sub(term_data.cdp_liquidity).unwrap().checked_abs().unwrap();
+
+            // Validate the fee payment
+            let fee_amount = liquidity_delta.checked_mul(self.fee_rate).unwrap();
+
+            assert_eq!(fee_payment.resource_address(), XRD, "Fee repayment must be in XRD");
+            assert!(fee_payment.amount() >= fee_amount, "Fee repayment is less than calculated");
+
+            self.fee_vault.put(fee_payment.take(fee_amount));
 
             // Return the CDP
             self.accounts.get_mut(&user_id).expect("User has no open account").put(cdp_bucket);
 
             // Burn the terms
             self.execution_term_manager.burn(terms_bucket);
+
+            // Return excess fee repayment
+            fee_payment
         }
 
         //] Private

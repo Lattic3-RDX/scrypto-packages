@@ -1,10 +1,21 @@
+# ------------------ Lattic3 ----------------- #
+CALL_METHOD
+    Address("${platform_address}")
+    "new_user"
+;
+
+TAKE_ALL_FROM_WORKTOP
+    Address("${user_badge_res}")
+    Bucket("user_badge")
+;
+
 # ------------------- User ------------------- #
 
 CALL_METHOD
-    Address("account_rdx12y4jmlyavnm3fkdc2ckuxpslnvt07cy8txmnyglve855q7m0akjtqp")
+    Address("${user_address}")
     "withdraw"
-    Address("resource_rdx1t4upr78guuapv5ept7d7ptekk9mqhy605zgms33mcszen8l9fac8vf")
-    Decimal("10")
+    Address("${supply_res}")
+    Decimal("${supply_amount}")
 ;
 
 # ------------------- Weft ------------------- #

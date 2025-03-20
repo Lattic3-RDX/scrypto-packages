@@ -30,6 +30,8 @@ impl YMWeftV2ClusterFactory {
         // Integration
         cdp: ResourceAddress,
     ) -> YMWeftV2Cluster {
+        let owner_account = runner.owner_account;
+
         // Call instantiation function
         #[rustfmt::skip]
         let manifest = ManifestBuilder::new()
@@ -43,13 +45,13 @@ impl YMWeftV2ClusterFactory {
                     supply, debt,
                     cdp
                 ),
-            )
-            .build();
+            );
 
-        let receipt = runner
-            .ledger
-            .execute_manifest(manifest, vec![NonFungibleGlobalId::from_public_key(&runner.owner_account.public_key)]);
+        // let receipt = runner
+        // .ledger
+        // .execute_manifest(manifest, vec![NonFungibleGlobalId::from_public_key(&runner.owner_account.public_key)]);
         // println!("{:?}\n", receipt);
+        let receipt = runner.exec_and_dump("instantiate", manifest, &owner_account, Some("clusters/yield_multiplier_weftv2"));
 
         // Collect output
         let component = receipt.expect_commit_success().new_component_addresses()[0];
