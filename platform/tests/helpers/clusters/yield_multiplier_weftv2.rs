@@ -43,7 +43,7 @@ impl YMWeftV2ClusterFactory {
                     owner_rule,
                     platform, link_badge, user_badge,
                     supply, debt,
-                    cdp
+                    platform, cdp
                 ),
             );
 

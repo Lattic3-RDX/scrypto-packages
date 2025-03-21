@@ -284,8 +284,8 @@ mod yield_multiplier_weftv2_cluster {
         }
 
         //] Fees
-        pub fn set_fee_percentage(&mut self, fee_percentage: Decimal) {
-            self.fee_rate = fee_percentage;
+        pub fn set_fee_percentage(&mut self, fee_rate: Decimal) {
+            self.fee_rate = fee_rate;
         }
 
         pub fn collect_fees(&mut self) -> FungibleBucket {
@@ -311,18 +311,22 @@ mod yield_multiplier_weftv2_cluster {
             // Update the user's badge
             let valid_user = self.__validate_user(user_badge);
             let user_id = valid_user.non_fungible_local_id();
-
-            assert!(
-                self.accounts.get(&user_id).is_none() || self.accounts.get(&user_id).unwrap().amount() == dec!(0),
-                "User already has an account"
-            );
-
             self.__with_link(|platform, link_badge| platform.call_raw("open_account", scrypto_args!(link_badge, user_id.clone())));
 
+            // assert!(
+            //     self.accounts.get(&user_id).is_none() || self.accounts.get(&user_id).unwrap().amount() == dec!(0),
+            //     "User already has an account"
+            // );
+
             // Add the CDP to the cluster
-            // let cdp_local_id = cdp.non_fungible_local_id();
-            let cdp_vault = NonFungibleVault::with_bucket(cdp);
-            self.accounts.insert(user_id, cdp_vault);
+            if self.accounts.get(&user_id).is_some() {
+                let mut vault = self.accounts.get_mut(&user_id).unwrap();
+                assert!(vault.amount() == dec!(0), "User already has an account");
+
+                vault.put(cdp);
+            } else {
+                self.accounts.insert(user_id, NonFungibleVault::with_bucket(cdp));
+            }
 
             // Update the account count
             self.account_count += 1;

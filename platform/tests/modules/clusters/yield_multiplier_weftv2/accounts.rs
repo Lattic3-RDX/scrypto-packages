@@ -47,7 +47,7 @@ fn test_valid_account_open_and_close() {
         .create_proof_from_account_of_non_fungibles(alice_account.address, platform.user_badge, vec![NonFungibleLocalId::Integer(0.into())])
         .pop_from_auth_zone("user_badge")
         .withdraw_non_fungibles_from_account(alice_account.address, weftv2.cdp, vec![cdp_id.clone()])
-        .take_non_fungibles_from_worktop(weftv2.cdp, vec![cdp_id], "cdp_bucket")
+        .take_non_fungibles_from_worktop(weftv2.cdp, vec![cdp_id.clone()], "cdp_bucket")
         .call_method_with_name_lookup(cluster.component, "open_account", |lookup| {
             (lookup.proof("user_badge"), lookup.bucket("cdp_bucket"))
         });
@@ -64,6 +64,20 @@ fn test_valid_account_open_and_close() {
         .deposit_entire_worktop(alice_account.address);
 
     let receipt = runner.exec_and_dump("close_account", manifest, &alice_account, Some("clusters/yield_multiplier_weftv2"));
+    receipt.expect_commit_success();
+
+    // Open an account
+    let manifest = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .create_proof_from_account_of_non_fungibles(alice_account.address, platform.user_badge, vec![NonFungibleLocalId::Integer(0.into())])
+        .pop_from_auth_zone("user_badge")
+        .withdraw_non_fungibles_from_account(alice_account.address, weftv2.cdp, vec![cdp_id.clone()])
+        .take_non_fungibles_from_worktop(weftv2.cdp, vec![cdp_id], "cdp_bucket")
+        .call_method_with_name_lookup(cluster.component, "open_account", |lookup| {
+            (lookup.proof("user_badge"), lookup.bucket("cdp_bucket"))
+        });
+
+    let receipt = runner.exec_and_dump("open_account", manifest, &alice_account, Some("clusters/yield_multiplier_weftv2"));
     receipt.expect_commit_success();
 }
 

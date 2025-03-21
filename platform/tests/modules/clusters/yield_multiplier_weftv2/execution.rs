@@ -5,6 +5,7 @@ use indexmap::indexmap;
 use scrypto_test::prelude::*;
 
 #[test]
+#[ignore = "Requires mainnet"]
 fn test_valid_execute_empty() {
     //] Arrange
     // Create a test runner and platform
@@ -77,6 +78,7 @@ fn test_valid_execute_empty() {
 }
 
 #[test]
+#[ignore = "Requires mainnet"]
 fn test_valid_execute_with_change() {
     //] Arrange
     // Create a test runner and platform
@@ -165,6 +167,7 @@ fn test_valid_execute_with_change() {
 }
 
 #[test]
+#[ignore = "Requires mainnet"]
 #[should_panic]
 fn test_invalid_execute_with_change() {
     //] Arrange
@@ -259,6 +262,7 @@ fn test_invalid_execute_with_change() {
 }
 
 #[test]
+#[ignore = "Requires mainnet"]
 #[should_panic]
 fn test_invalid_execute_without_ending() {
     //] Arrange
@@ -323,6 +327,7 @@ fn test_invalid_execute_without_ending() {
 }
 
 #[test]
+#[ignore = "Requires mainnet"]
 #[should_panic]
 fn test_invalid_execute_different_cdps() {
     //] Arrange
@@ -401,6 +406,7 @@ fn test_invalid_execute_different_cdps() {
 
 /* ------------------- Link ------------------- */
 #[test]
+#[ignore = "Requires mainnet"]
 #[should_panic]
 fn test_invalid_execute_without_link() {
     //] Arrange
@@ -471,6 +477,7 @@ fn test_invalid_execute_without_link() {
 
 /* ------------ Operating Services ------------ */
 #[test]
+#[ignore = "Requires mainnet"]
 #[should_panic]
 fn test_invalid_execute_empty_when_service_disabled() {
     //] Arrange

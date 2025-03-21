@@ -38,25 +38,22 @@ pub struct LoanPositionData {
 
 #[derive(ScryptoSbor, Debug, Clone)]
 pub struct LoanConfig {
-    pub a: String,
-    pub b: Decimal,
-    pub c: Decimal,
+    /// Config description
+    pub description: String,
+
+    /// Define a an inflation factor on a loan asset to help mitigate potential risk in borrowing this asset
+    pub loan_value_factor: Decimal,
+
+    /// Define the maximum share of a loan that could be repay in a fungible collateral liquidation
+    pub loan_close_factor: Decimal,
 }
 
 #[derive(ScryptoSbor, Debug, Clone)]
 pub struct LoanResourceConfig {
-    pub a: u16,
-    pub b: Vec<u16>,
-    pub c: LoanConfigPlaceholder,
+    pub loan_config_id: u16,
+    pub excluded_isolation_group_ids: IndexSet<u16>,
+    pub efficiency_group_id: Option<u16>,
 }
-
-#[derive(ScryptoSbor, Debug, Clone)]
-pub enum LoanConfigPlaceholder {
-    A(u16),
-    B(u16),
-    C(u16),
-}
-
 #[derive(ScryptoSbor, Debug, Clone)]
 pub struct CollateralPositionData {
     pub price: Decimal,
@@ -74,31 +71,28 @@ pub struct CollateralPositionData {
 
 #[derive(ScryptoSbor, Debug, Clone)]
 pub struct CollateralConfig {
-    pub a: String,
-    pub b: Decimal,
-    pub c: Decimal,
-    pub d: Decimal,
+    /// Config description
+    pub description: String,
+
+    pub loan_to_value_ratio: Decimal,
+
+    pub liquidation_threshold_spread: Decimal,
+
+    pub liquidation_bonus_rate: Decimal,
 }
 
 #[derive(ScryptoSbor, Debug, Clone)]
 pub struct CollateralResourceConfig {
-    pub a: u16,
-    pub b: CollateralPlaceholder,
-    pub c: Vec<u16>,
+    pub collateral_config_id: u16,
+    pub isolation_group_id: Option<u16>,
+    pub efficiency_group_ids: IndexSet<u16>,
 }
 
-#[derive(ScryptoSbor, Debug, Clone)]
+#[derive(ScryptoSbor, Debug, Clone, Copy, PartialEq)]
 pub enum RegisteredResourceType {
-    A,
-    B,
-    C,
-}
-
-#[derive(ScryptoSbor, Debug, Clone)]
-pub enum CollateralPlaceholder {
-    A,
-    B,
-    C,
+    RegisteredToken,
+    LSU(ComponentAddress),
+    DepositUnit(ResourceAddress),
 }
 
 #[derive(ScryptoSbor, Debug, Clone)]
@@ -118,11 +112,11 @@ pub struct NFTLiquidationValue {
     pub resource_type: RegisteredNFTResourceType,
 }
 
-#[derive(ScryptoSbor, Debug, Clone)]
+#[derive(ScryptoSbor, Debug, Clone, Copy, Default)]
 pub enum RegisteredNFTResourceType {
-    A,
-    B,
-    C,
+    #[default]
+    RegisteredNFT,
+    ClaimNFT(ComponentAddress),
 }
 
 /* --------------- Raw CDP Data --------------- */
