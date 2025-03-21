@@ -31,6 +31,7 @@ impl YMWeftV2ClusterFactory {
         cdp: ResourceAddress,
     ) -> YMWeftV2Cluster {
         let owner_account = runner.owner_account;
+        let admin_rule = rule!(deny_all);
 
         // Call instantiation function
         #[rustfmt::skip]
@@ -40,7 +41,7 @@ impl YMWeftV2ClusterFactory {
                 self.package_address,
                 "YieldMultiplierWeftV2Cluster", "instantiate",
                 manifest_args!(
-                    owner_rule,
+                    owner_rule, admin_rule,
                     platform, link_badge, user_badge,
                     supply, debt,
                     platform, cdp

@@ -2,7 +2,7 @@
 use crate::execution::ExecutionTerms;
 use crate::info::{AccountInfo, ClusterInfo, EventAccountInfo, EventClusterInfo};
 use crate::services::{ClusterService, ClusterServiceManager};
-use crate::weft::{CDPData, CDPHealthChecker};
+use crate::weft::*;
 use scrypto::prelude::*;
 use shared::services::SetLock;
 use std::panic::catch_unwind;
@@ -23,23 +23,38 @@ use std::panic::catch_unwind;
     ClusterInfo,
     CDPData,
     CDPHealthChecker,
-    SetLock
+    SetLock,
+    LoanPositionData,
+    LoanConfig,
+    LoanResourceConfig,
+    CollateralPositionData,
+    CollateralConfig,
+    CollateralResourceConfig,
+    RegisteredResourceType,
+    NFTCollateralPositionData,
+    NFTLiquidationValue,
+    RegisteredNFTResourceType,
+    EfficiencyMode,
+    CollateralConfigVersion,
+    CollateralInfo,
+    NFTCollateralInfo,
+    LoanInfo
 )]
 #[events(EventAccountInfo, EventClusterInfo)]
 mod yield_multiplier_weftv2_cluster {
     //] --------------- Scrypto Setup -------------- */
     enable_method_auth! {
         roles {
-            can_manage_fees     => updatable_by: [OWNER];
-            can_update_services => updatable_by: [OWNER];
+            can_manage_services => updatable_by: [OWNER];
             can_lock_services   => updatable_by: [OWNER];
+            can_manage_fees     => updatable_by: [OWNER];
         },
         methods {
             // Links
             handle_link => PUBLIC;
             // Cluster
             get_cluster_info => PUBLIC;
-            update_service              => restrict_to: [can_update_services, can_lock_services];
+            update_service              => restrict_to: [can_manage_services, can_lock_services];
             update_service_and_set_lock => restrict_to: [can_lock_services];
             set_fee_percentage => restrict_to: [can_manage_fees];
             collect_fees       => restrict_to: [can_manage_fees];
@@ -93,6 +108,7 @@ mod yield_multiplier_weftv2_cluster {
         pub fn instantiate(
             // Authorisation
             owner_rule: AccessRule,
+            admin_rule: AccessRule,
             // Link
             platform_address: ComponentAddress,
             link_resource: ResourceAddress,
@@ -110,9 +126,6 @@ mod yield_multiplier_weftv2_cluster {
             //] Authorisation
             // Component
             let component_access_rule: AccessRule = rule!(require(global_caller(component_address)));
-
-            // Platform
-            // let platform_access_rule: AccessRule = rule!(require(global_caller(parent_platform)));
 
             // Component owner
             let owner_role: OwnerRole = OwnerRole::Fixed(owner_rule.clone());
@@ -155,7 +168,7 @@ mod yield_multiplier_weftv2_cluster {
             // Roles
             let component_roles = roles! {
                 can_manage_fees     => OWNER;
-                can_update_services => OWNER;
+                can_manage_services => admin_rule;
                 can_lock_services   => OWNER;
             };
 
@@ -518,10 +531,10 @@ mod yield_multiplier_weftv2_cluster {
             }
 
             //? Check for (unlikely) invalid CDP states
-            // if cdp.loans.len() == 1 && cdp.collaterals.len() == 0 {
-            //     info!("Invalid CDP state: 1 loan, 0 collateral");
-            //     return false;
-            // }
+            if cdp.loans.len() == 1 && cdp.collaterals.len() == 0 {
+                info!("Invalid CDP state: 1 loan, 0 collateral");
+                return false;
+            }
 
             // Validate that all supply and debt assets are valid
             for (&resource, _) in cdp.collaterals.iter() {

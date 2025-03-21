@@ -53,6 +53,7 @@ mod platform {
     struct Platform {
         // Authorisation
         component_address: ComponentAddress,
+        admin_badge_manager: NonFungibleResourceManager,
         // User badges
         user_badge_manager: NonFungibleResourceManager,
         user_count: u64,
@@ -66,14 +67,7 @@ mod platform {
 
     impl Platform {
         // Instantiate and mint a new owner/admin/etc. badge
-        pub fn instantiate() -> (Global<Platform>, FungibleBucket) {
-            // Reserve component address
-            let (address_reservation, component_address) = Runtime::allocate_component_address(Self::blueprint_id());
-
-            //] Authorisation
-            // Component
-            let component_access_rule: AccessRule = rule!(require(global_caller(component_address)));
-
+        pub fn instantiate(dapp_definition_address: ComponentAddress) -> (Global<Platform>, FungibleBucket) {
             // Component owner
             let owner_badge: FungibleBucket = ResourceBuilder::new_fungible(OwnerRole::None)
                 .divisibility(DIVISIBILITY_NONE)
@@ -82,52 +76,93 @@ mod platform {
                     "description" => "Badge representing the owner of the Lattic3 lending platform", locked;
                 }})
                 .mint_initial_supply(1);
-            let owner_access_rule: AccessRule = rule!(require(owner_badge.resource_address()));
-            let owner_role: OwnerRole = OwnerRole::Fixed(owner_access_rule.clone());
+            let owner_rule: AccessRule = rule!(require(owner_badge.resource_address()));
 
-            // let admin_badge_manager:
+            let platform: Global<Platform> = Self::instantiate_advanced(owner_rule, dapp_definition_address);
 
+            (platform, owner_badge)
+        }
+
+        pub fn instantiate_advanced(owner_rule: AccessRule, dapp_definition_address: ComponentAddress) -> Global<Platform> {
+            // Reserve component address
+            let (address_reservation, component_address) = Runtime::allocate_component_address(Self::blueprint_id());
+
+            //] Authorisation
+            // Component
+            let component_rule: AccessRule = rule!(require(global_caller(component_address)));
+
+            // Component owner
+            let owner_role: OwnerRole = OwnerRole::Fixed(owner_rule.clone());
+
+            // Admin badge
+            let admin_badge_manager: NonFungibleResourceManager = ResourceBuilder::new_integer_non_fungible::<User>(owner_role.clone())
+                .metadata(metadata! {init {
+                    "name"            => "L3//Admin Badge", locked;
+                    "description"     => "Badge used to denote an admin's ownership over accounts in Lattic3 clusters.", locked;
+                    "dapp_definition" => dapp_definition_address, updatable;
+                }})
+                .non_fungible_data_update_roles(non_fungible_data_update_roles! {
+                    non_fungible_data_updater         => component_rule.clone();
+                    non_fungible_data_updater_updater => rule!(deny_all);
+                })
+                .mint_roles(mint_roles! {
+                    minter         => component_rule.clone();
+                    minter_updater => rule!(deny_all);
+                })
+                .burn_roles(burn_roles! {
+                    burner         => owner_rule.clone();
+                    burner_updater => owner_rule.clone();
+                })
+                .recall_roles(recall_roles! {
+                    recaller         => owner_rule.clone();
+                    recaller_updater => owner_rule.clone();
+                })
+                .create_with_no_initial_supply();
+            let admin_rule: AccessRule = rule!(require(admin_badge_manager.address()));
+
+            // User badge
             let user_badge_manager: NonFungibleResourceManager = ResourceBuilder::new_integer_non_fungible::<User>(owner_role.clone())
                 .metadata(metadata! {init {
                     "name"            => "L3//User Badge", locked;
                     "description"     => "Badge used to denote a user's ownership over accounts in Lattic3 clusters.", locked;
-                    // "dapp_definition" => dapp_definition_address, updatable;
+                    "dapp_definition" => dapp_definition_address, updatable;
                 }})
                 .non_fungible_data_update_roles(non_fungible_data_update_roles! {
-                    non_fungible_data_updater         => component_access_rule.clone();
+                    non_fungible_data_updater         => component_rule.clone();
                     non_fungible_data_updater_updater => rule!(deny_all);
                 })
                 .mint_roles(mint_roles! {
-                    minter         => component_access_rule.clone();
+                    minter         => component_rule.clone();
                     minter_updater => rule!(deny_all);
                 })
                 .burn_roles(burn_roles! {
-                    burner         => component_access_rule.clone();
+                    burner         => component_rule.clone();
                     burner_updater => rule!(deny_all);
                 })
                 .create_with_no_initial_supply();
 
+            // Link badge
             let link_badge_manager: NonFungibleResourceManager = ResourceBuilder::new_integer_non_fungible::<Link>(owner_role.clone())
                 .metadata(metadata! {init {
                     "name"            => "L3//Link", locked;
                     "description"     => "Badge linking this cluster to the Lattic3 platform.", locked;
-                    // "dapp_definition" => dapp_definition_address, updatable;
+                    "dapp_definition" => dapp_definition_address, updatable;
                 }})
                 .non_fungible_data_update_roles(non_fungible_data_update_roles! {
-                    non_fungible_data_updater         => component_access_rule.clone();
+                    non_fungible_data_updater         => component_rule.clone();
                     non_fungible_data_updater_updater => rule!(deny_all);
                 })
                 .mint_roles(mint_roles! {
-                    minter         => component_access_rule.clone();
+                    minter         => component_rule.clone();
                     minter_updater => rule!(deny_all);
                 })
                 .burn_roles(burn_roles! {
-                    burner         => component_access_rule.clone();
-                    burner_updater => rule!(deny_all);
+                    burner         => owner_rule.clone();
+                    burner_updater => owner_rule.clone();
                 })
                 .recall_roles(recall_roles! {
-                    recaller         => rule!(require(owner_badge.resource_address()) || require(global_caller(component_address)));
-                    recaller_updater => rule!(deny_all);
+                    recaller         => owner_rule.clone();
+                    recaller_updater => owner_rule.clone();
                 })
                 .create_with_no_initial_supply();
 
@@ -143,14 +178,14 @@ mod platform {
                 init {
                     "name"            => "L3//Platform", updatable;
                     "description"     => "Platform component for the Lattic3 DeFi strategy aggregator.", updatable;
-                    // "dapp_definition" => dapp_definition_address, updatable;
+                    "dapp_definition" => dapp_definition_address, updatable;
                 }
             };
 
             // Roles
             let component_roles = roles! {
                 can_manage_links    => OWNER;
-                can_update_services => OWNER;
+                can_update_services => admin_rule;
                 can_lock_services   => OWNER;
             };
 
@@ -158,6 +193,7 @@ mod platform {
             let initial_state = Self {
                 // Authorisation
                 component_address,
+                admin_badge_manager,
                 // User badges
                 user_badge_manager,
                 user_count: 0,
@@ -177,7 +213,7 @@ mod platform {
                 .with_address(address_reservation)
                 .globalize();
 
-            (component, owner_badge)
+            component
         }
 
         //] ------------------- User ------------------- */

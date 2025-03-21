@@ -17,7 +17,7 @@ impl PlatformFactory {
         // Call instantiation function
         let manifest = ManifestBuilder::new()
             .lock_fee_from_faucet()
-            .call_function(self.package, "Platform", "instantiate", manifest_args!())
+            .call_function(self.package, "Platform", "instantiate", manifest_args!(owner.address,))
             .deposit_batch(owner.address, ManifestExpression::EntireWorktop)
             .build();
 
@@ -27,12 +27,14 @@ impl PlatformFactory {
         // Collect output
         let component = receipt.expect_commit_success().new_component_addresses()[0];
         let owner_badge = receipt.expect_commit_success().new_resource_addresses()[0];
-        let user_badge = receipt.expect_commit_success().new_resource_addresses()[1];
-        let link_badge = receipt.expect_commit_success().new_resource_addresses()[2];
+        let admin_badge = receipt.expect_commit_success().new_resource_addresses()[1];
+        let user_badge = receipt.expect_commit_success().new_resource_addresses()[2];
+        let link_badge = receipt.expect_commit_success().new_resource_addresses()[3];
 
         println!("Component: {:?}\n", component);
         println!("Owner Badge: {:?}\n", owner_badge);
         println!("User Badge: {:?}\n", user_badge);
+        println!("Admin Badge: {:?}\n", admin_badge);
         println!("Link Badge: {:?}\n", link_badge);
 
         // Return HelperPlatform
