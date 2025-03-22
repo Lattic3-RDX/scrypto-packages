@@ -271,9 +271,10 @@ mod yield_multiplier_weftv2_cluster {
                 platform_address: self.platform_address,
                 cluster_address: self.component_address,
                 linked: self.link.amount() > dec!(0),
-                account_count: self.account_count,
                 supply_res: self.supply,
                 debt_res: self.debt,
+                execution_term_res: self.execution_term_manager.address(),
+                account_count: self.account_count,
             };
 
             Runtime::emit_event(EventClusterInfo { info: info.clone() });
