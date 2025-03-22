@@ -44,7 +44,7 @@ mod platform {
             update_cluster_service_and_set_lock => restrict_to: [can_lock_services];
             // Platform
             get_user_badge_address => PUBLIC;
-            new_admin_badge => restrict_to: [OWNER];
+            new_admin_badge        => restrict_to: [OWNER];
             update_service              => restrict_to: [can_update_services, can_lock_services];
             update_service_and_set_lock => restrict_to: [can_lock_services];
         }
