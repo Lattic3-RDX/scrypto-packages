@@ -95,7 +95,8 @@ mod yield_multiplier_weftv2_cluster {
         /// Instantiates a new `YieldMultiplierWeftV2Cluster` component with the specified configuration.
         ///
         /// # Parameters
-        /// - `owner_rule`: Access rule defining the owner of the component.
+        /// - `owner_rule`: Access rule defining the owner of the cluster.
+        /// - `admin_rule`: Access rule defining the admins of the cluster.
         /// - `platform_address`: The component address of the platform to which this cluster links.
         /// - `link_resource`: Resource address for the link badge used to link this cluster to a platform.
         /// - `user_resource`: Resource address for the user badge required for user operations.
@@ -280,32 +281,57 @@ mod yield_multiplier_weftv2_cluster {
         }
 
         //] Services
-        /// Updates a cluster service without setting lock.
+        /// Updates a cluster service, assuming it is not locked.
         ///
         /// # Parameters
         /// - `service`: The service to update.
         /// - `value`: The value to set the service to.
         ///
         /// # Panics
-        /// - If the service is not enabled in the blueprint
+        /// - If the service is currently locked.
         pub fn update_service(&mut self, service: ClusterService, value: bool) {
             self.services.update(service, value, SetLock::None);
         }
 
+        /// Updates a cluster service and sets the lock state.
+        ///
+        /// # Parameters
+        /// - `service`: The service to update.
+        /// - `value`: The value to set the service to.
+        /// - `locked`: The value to which the lock status of the service is set to.
         pub fn update_service_and_set_lock(&mut self, service: ClusterService, value: bool, locked: bool) {
             self.services.update(service, value, SetLock::Update(locked));
         }
 
         //] Fees
+        /// Sets the fee rate.
+        ///
+        /// # Parameters
+        /// - `fee_rate`: The fee rate to set; percentage from 0 to 1 -> 0% to 100%.
         pub fn set_fee_percentage(&mut self, fee_rate: Decimal) {
             self.fee_rate = fee_rate;
         }
 
+        /// Collects fees from the fee vault.
+        ///
+        /// # Returns
+        /// - A `FungibleBucket` containing the collected fees.
         pub fn collect_fees(&mut self) -> FungibleBucket {
             self.fee_vault.take_all()
         }
 
         //] ----------------- Accounts ----------------- */
+        /// Opens an account for a user on the cluster. Deposits CDP into the `accounts` KV, in a corresponding vault.
+        ///
+        /// # Parameters
+        /// - `user_badge`: Proof of the user's badge from the platform.
+        /// - `cdp`: Weft CDP input.
+        ///
+        /// # Panics
+        /// - If the cluster is not linked.
+        /// - If the ClusterService::OpenAccount is disabled.
+        /// - If the user already has an account.
+        /// - If the CDP is invalid.
         pub fn open_account(&mut self, user_badge: NonFungibleProof, cdp: NonFungibleBucket) {
             // Check operating service
             assert!(self.services.get(ClusterService::OpenAccount), "ClusterService::OpenAccount disabled");
@@ -345,6 +371,18 @@ mod yield_multiplier_weftv2_cluster {
             self.account_count += 1;
         }
 
+        /// Closes an account for a user on the cluster, and withdraws CDP.
+        ///
+        /// # Parameters
+        /// - `user_badge`: Proof of the user's badge from the platform.
+        ///
+        /// # Panics
+        /// - If the cluster is not linked.
+        /// - If the ClusterService::CloseAccount is disabled.
+        /// - If the user does not have an account.
+        ///
+        /// # Returns
+        /// - A `NonFungibleBucket` containing the CDP.
         pub fn close_account(&mut self, user_badge: NonFungibleProof) -> NonFungibleBucket {
             // Check operating service
             assert!(self.services.get(ClusterService::CloseAccount), "ClusterService::CloseAccount disabled");
@@ -367,6 +405,16 @@ mod yield_multiplier_weftv2_cluster {
             cdp_bucket
         }
 
+        /// Returns general information about an account. Queried from Weft using their `get_cdp` method.
+        ///
+        /// # Parameters
+        /// - `local_id`: The local ID of the account to query.
+        ///
+        /// # Returns
+        /// - A `AccountInfo` struct with the account's information.
+        ///
+        /// # Emits
+        /// - `EventAccountInfo`: contains the same information as the returned `AccountInfo` struct.
         pub fn get_account_info(&self, local_id: NonFungibleLocalId) -> AccountInfo {
             let cdp_id = self.accounts.get(&local_id).expect("User has no open account").non_fungible_local_id();
             let weft_market: Global<AnyComponent> = self.weft_market_address.into();
@@ -396,6 +444,19 @@ mod yield_multiplier_weftv2_cluster {
             info
         }
 
+        /// Starts a transaction execution with the user's CDP; must execute in one transaction, and fit requirements as per the ExecutionTerms.
+        ///
+        /// # Parameters
+        /// - `user_badge`: Proof of the user's badge from the platform.
+        ///
+        /// # Panics
+        /// - If the cluster is not linked.
+        /// - If the ClusterService::Execute is disabled.
+        /// - If the user does not have an account.
+        ///
+        /// # Returns
+        /// - A `NonFungibleBucket` containing the CDP
+        /// - A `NonFungibleBucket` containing the execution terms
         pub fn start_execution(&mut self, user_badge: NonFungibleProof) -> (NonFungibleBucket, NonFungibleBucket) {
             // Check operating service
             assert!(self.services.get(ClusterService::Execute), "ClusterService::Execute disabled");
@@ -426,6 +487,24 @@ mod yield_multiplier_weftv2_cluster {
             (cdp_bucket, terms_bucket)
         }
 
+        /// Ends a transaction execution with the user's CDP; must satisfy the execution terms and repayment.
+        ///
+        /// # Parameters
+        /// - `user_badge`: Proof of the user's badge from the platform.
+        /// - `cdp_bucket`: The CDP to end the execution with.
+        /// - `terms_bucket`: The execution terms to validate and burn.
+        /// - `fee_payment`: The fee repayment to validate and collect.
+        ///
+        /// # Panics
+        /// - If the cluster is not linked.
+        /// - If the ClusterService::Execute is disabled.
+        /// - If the user does not have an account.
+        /// - If the CDP is invalid.
+        /// - If the execution terms are invalid.
+        /// - If the fee repayment is invalid.
+        ///
+        /// # Returns
+        /// - A `FungibleBucket` containing the excess fee repayment.
         pub fn end_execution(
             &mut self,
             user_badge: NonFungibleProof,

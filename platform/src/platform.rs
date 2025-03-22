@@ -35,15 +35,16 @@ mod platform {
         methods {
             // User
             new_user      => PUBLIC;
-            open_account  => PUBLIC; // Restricted by link badge
-            close_account => PUBLIC; // Restricted by link badge
+            open_account  => PUBLIC;
+            close_account => PUBLIC;
             // Links
             link_cluster   => restrict_to: [can_manage_links];
             unlink_cluster => restrict_to: [can_manage_links];
             update_cluster_service              => restrict_to: [can_update_services, can_lock_services];
             update_cluster_service_and_set_lock => restrict_to: [can_lock_services];
-            // State
+            // Platform
             get_user_badge_address => PUBLIC;
+            new_admin_badge => restrict_to: [OWNER];
             update_service              => restrict_to: [can_update_services, can_lock_services];
             update_service_and_set_lock => restrict_to: [can_lock_services];
         }
@@ -54,6 +55,7 @@ mod platform {
         // Authorisation
         component_address: ComponentAddress,
         admin_badge_manager: NonFungibleResourceManager,
+        admin_count: u64,
         // User badges
         user_badge_manager: NonFungibleResourceManager,
         user_count: u64,
@@ -66,7 +68,15 @@ mod platform {
     }
 
     impl Platform {
-        // Instantiate and mint a new owner/admin/etc. badge
+        /// Instantiates a new `Platform` component, with a specified `dapp_definition_address`.
+        /// Also creates an owner badge for the platform.
+        ///
+        /// # Parameters
+        /// - `dapp_definition_address`: The address of the dAppDefinition account.
+        ///
+        /// # Returns
+        /// - `Global<Platform>`: A global reference to the instantiated `Platform` component.
+        /// - `FungibleBucket`: The owner badge of the `Platform` component.
         pub fn instantiate(dapp_definition_address: ComponentAddress) -> (Global<Platform>, FungibleBucket) {
             // Component owner
             let owner_badge: FungibleBucket = ResourceBuilder::new_fungible(OwnerRole::None)
@@ -83,6 +93,15 @@ mod platform {
             (platform, owner_badge)
         }
 
+        /// Instantiates a new `Platform` component, with a specified `owner_rule` and `dapp_definition_address`.
+        /// Creates an admin badge, link badge, and user badge.
+        ///
+        /// # Parameters
+        /// - `owner_rule`: Access rule specifying the owner of the component.
+        /// - `dapp_definition_address`: The address of the dAppDefinition account.
+        ///
+        /// # Returns
+        /// - `Global<Platform>`: A global reference to the instantiated `Platform` component.
         pub fn instantiate_advanced(owner_rule: AccessRule, dapp_definition_address: ComponentAddress) -> Global<Platform> {
             // Reserve component address
             let (address_reservation, component_address) = Runtime::allocate_component_address(Self::blueprint_id());
@@ -95,7 +114,7 @@ mod platform {
             let owner_role: OwnerRole = OwnerRole::Fixed(owner_rule.clone());
 
             // Admin badge
-            let admin_badge_manager: NonFungibleResourceManager = ResourceBuilder::new_integer_non_fungible::<User>(owner_role.clone())
+            let admin_badge_manager: NonFungibleResourceManager = ResourceBuilder::new_integer_non_fungible::<()>(owner_role.clone())
                 .metadata(metadata! {init {
                     "name"            => "L3//Admin Badge", locked;
                     "description"     => "Badge used to denote an admin's ownership over accounts in Lattic3 clusters.", locked;
@@ -194,6 +213,7 @@ mod platform {
                 // Authorisation
                 component_address,
                 admin_badge_manager,
+                admin_count: 0,
                 // User badges
                 user_badge_manager,
                 user_count: 0,
@@ -217,6 +237,14 @@ mod platform {
         }
 
         //] ------------------- User ------------------- */
+        /// Mint a new user badge; accounts empty by default.
+        ///
+        /// # Panics
+        /// - If the service `PlatformService::MintBadge` is disabled.
+        /// - If the number of user badges exceeds u64::MAX.
+        ///
+        /// # Returns
+        /// - `NonFungibleBucket`: The new user badge.
         pub fn new_user(&mut self) -> NonFungibleBucket {
             // Ensure that a new user badge can be minted
             assert!(self.services.get(PlatformService::MintBadge).value, "PlatformService::MintBadge disabled");
@@ -322,6 +350,14 @@ mod platform {
         }
 
         //] Services
+        /// Updates a cluster service, assuming it is not locked.
+        ///
+        /// # Parameters
+        /// - `service`: The service to update.
+        /// - `value`: The value to set the service to.
+        ///
+        /// # Panics
+        /// - If the service is currently locked.
         pub fn update_cluster_service(&mut self, cluster_address: ComponentAddress, service: ClusterService, value: bool) {
             let mut wrapper = self
                 .linked_clusters
@@ -330,6 +366,12 @@ mod platform {
             wrapper.services.update_service(service, value, false);
         }
 
+        /// Updates a cluster service and sets the lock state.
+        ///
+        /// # Parameters
+        /// - `service`: The service to update.
+        /// - `value`: The value to set the service to.
+        /// - `locked`: The value to which the lock status of the service is set to.
         pub fn update_cluster_service_and_set_lock(&mut self, cluster_address: ComponentAddress, service: ClusterService, value: bool, locked: bool) {
             let mut wrapper = self
                 .linked_clusters
@@ -356,16 +398,53 @@ mod platform {
             wrapper.clone()
         }
 
-        //] ------------------- State ------------------ */
+        //] ----------------- Platform ----------------- */
+        /// Returns the ResourceAddress of the user badge.
         pub fn get_user_badge_address(&self) -> ResourceAddress {
             self.user_badge_manager.address()
         }
 
+        /// Mint a new admin badge.
+        ///
+        /// # Panics
+        /// - If the service `PlatformService::MintBadge` is disabled.
+        /// - If the number of admin badges exceeds u64::MAX.
+        ///
+        /// # Returns
+        /// - `NonFungibleBucket`: The new admin badge.
+        pub fn new_admin_badge(&mut self) -> NonFungibleBucket {
+            // Ensure that a new user badge can be minted
+            assert!(self.services.get(PlatformService::MintBadge).value, "PlatformService::MintBadge disabled");
+            assert!(self.admin_count < u64::MAX, "Cannot mint more user badges; at U64 MAX");
+
+            // Create empty user badge
+            let badge_id = NonFungibleLocalId::Integer(self.admin_count.into());
+
+            // Increment user badge count
+            self.admin_count += 1;
+
+            self.admin_badge_manager.mint_non_fungible(&badge_id, ())
+        }
+
         //] Services
+        /// Updates a platform service, assuming it is not locked.
+        ///
+        /// # Parameters
+        /// - `service`: The service to update.
+        /// - `value`: The value to set the service to.
+        ///
+        /// # Panics
+        /// - If the service is currently locked.
         pub fn update_service(&mut self, service: PlatformService, value: bool) {
             self.services.update(service, value, false);
         }
 
+        /// Updates a platform service and sets the lock state.
+        ///
+        /// # Parameters
+        /// - `service`: The service to update.
+        /// - `value`: The value to set the service to.
+        /// - `locked`: The value to which the lock status of the service is set to.
         pub fn update_service_and_set_lock(&mut self, service: PlatformService, value: bool, locked: bool) {
             self.services.update(service, value, locked);
         }
