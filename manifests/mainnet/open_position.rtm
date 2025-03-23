@@ -35,6 +35,12 @@ TAKE_ALL_FROM_WORKTOP
     Bucket("raw_supply")
 ;
 
+TAKE_FROM_WORKTOP
+    Address("")
+    Decimal("amount")
+    Bucket("bucket_name")
+;
+
 # Convert xUSDC into w2_xUSDC
 CALL_METHOD
     Address("component_rdx1czmr02yl4da709ceftnm9dnmag7rthu0tu78wmtsn5us9j02d9d0xn")

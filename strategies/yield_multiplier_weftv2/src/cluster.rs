@@ -421,7 +421,9 @@ mod yield_multiplier_weftv2_cluster {
             let weft_market: Global<AnyComponent> = self.weft_market_address.into();
 
             // Fetch and parse the CDP
-            let cdp_health = weft_market.call_raw::<CDPHealthChecker>("get_cdp", scrypto_args!(indexset![cdp_id]));
+            let cdp_health_map =
+                weft_market.call_raw::<IndexMap<NonFungibleLocalId, CDPHealthChecker>>("get_cdp", scrypto_args!(indexset![cdp_id.clone()]));
+            let cdp_health = cdp_health_map.get(&cdp_id).unwrap();
             let supply = match cdp_health.collateral_positions.get(&self.supply) {
                 Some(collateral) => collateral.amount,
                 None => dec!(0),
