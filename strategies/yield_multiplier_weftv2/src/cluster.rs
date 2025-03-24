@@ -1,6 +1,6 @@
 /* ------------------ Imports ----------------- */
 use crate::execution::ExecutionTerms;
-use crate::info::{AccountInfo, ClusterInfo, EventAccountInfo, EventClusterInfo};
+use crate::info::{AccountInfo, ClusterInfo};
 use crate::services::{ClusterService, ClusterServiceManager};
 use crate::weft::*;
 use scrypto::prelude::*;
@@ -40,7 +40,7 @@ use std::panic::catch_unwind;
     NFTCollateralInfo,
     LoanInfo
 )]
-#[events(EventAccountInfo, EventClusterInfo)]
+// #[events(EventAccountInfo, EventClusterInfo)]
 mod yield_multiplier_weftv2_cluster {
     //] --------------- Scrypto Setup -------------- */
     enable_method_auth! {
@@ -277,7 +277,7 @@ mod yield_multiplier_weftv2_cluster {
                 account_count: self.account_count,
             };
 
-            Runtime::emit_event(EventClusterInfo { info: info.clone() });
+            // Runtime::emit_event(EventClusterInfo { info: info.clone() });
             info
         }
 
@@ -423,7 +423,7 @@ mod yield_multiplier_weftv2_cluster {
             // Fetch and parse the CDP
             let cdp_health_map =
                 weft_market.call_raw::<IndexMap<NonFungibleLocalId, CDPHealthChecker>>("get_cdp", scrypto_args!(indexset![cdp_id.clone()]));
-            let cdp_health = cdp_health_map.get(&cdp_id).unwrap();
+            let cdp_health = cdp_health_map.get(&cdp_id.clone()).unwrap();
             let supply = match cdp_health.collateral_positions.get(&self.supply) {
                 Some(collateral) => collateral.amount,
                 None => dec!(0),
@@ -435,7 +435,7 @@ mod yield_multiplier_weftv2_cluster {
 
             // Construct and emit the account info
             let info = AccountInfo {
-                cdp_id: local_id,
+                cdp_id,
                 supply,
                 supply_value: cdp_health.total_collateral_value,
                 debt,
@@ -443,7 +443,7 @@ mod yield_multiplier_weftv2_cluster {
                 health: cdp_health.health_ltv,
             };
 
-            Runtime::emit_event(EventAccountInfo { info: info.clone() });
+            // Runtime::emit_event(EventAccountInfo { info: info.clone() });
             info
         }
 
@@ -552,7 +552,9 @@ mod yield_multiplier_weftv2_cluster {
 
             // Get the CDPHealthChecker for the CDP and get the net total value (liquidity)
             let weft_market: Global<AnyComponent> = self.weft_market_address.into();
-            let cdp_health = weft_market.call_raw::<CDPHealthChecker>("get_cdp", scrypto_args!(indexset![cdp_id]));
+            let cdp_health_map =
+                weft_market.call_raw::<IndexMap<NonFungibleLocalId, CDPHealthChecker>>("get_cdp", scrypto_args!(indexset![cdp_id.clone()]));
+            let cdp_health = cdp_health_map.get(&cdp_id.clone()).unwrap();
 
             let liquidity = cdp_health.total_collateral_value.checked_sub(cdp_health.total_loan_value).unwrap();
             let liquidity_delta = liquidity.checked_sub(term_data.cdp_liquidity).unwrap().checked_abs().unwrap();
