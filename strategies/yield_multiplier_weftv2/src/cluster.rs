@@ -4,6 +4,7 @@ use crate::info::{AccountInfo, ClusterInfo};
 use crate::services::{ClusterService, ClusterServiceManager};
 use crate::weft::*;
 use scrypto::prelude::*;
+use shared::services::ServiceValue;
 use shared::services::SetLock;
 use std::panic::catch_unwind;
 
@@ -14,11 +15,14 @@ use std::panic::catch_unwind;
     ResourceAddress,
     NonFungibleResourceManager,
     NonFungibleLocalId,
+    NonFungibleVault,
+    FungibleVault,
     Decimal,
     u64,
     BlueprintId,
     ClusterServiceManager,
     ClusterService,
+    ServiceValue,
     AccountInfo,
     ClusterInfo,
     CDPData,
@@ -42,6 +46,7 @@ use std::panic::catch_unwind;
 )]
 // #[events(EventAccountInfo, EventClusterInfo)]
 mod yield_multiplier_weftv2_cluster {
+
     //] --------------- Scrypto Setup -------------- */
     enable_method_auth! {
         roles {
@@ -424,6 +429,7 @@ mod yield_multiplier_weftv2_cluster {
             let cdp_health_map =
                 weft_market.call_raw::<IndexMap<NonFungibleLocalId, CDPHealthChecker>>("get_cdp", scrypto_args!(indexset![cdp_id.clone()]));
             let cdp_health = cdp_health_map.get(&cdp_id.clone()).unwrap();
+
             let supply = match cdp_health.collateral_positions.get(&self.supply) {
                 Some(collateral) => collateral.amount,
                 None => dec!(0),
@@ -478,7 +484,10 @@ mod yield_multiplier_weftv2_cluster {
             // Get the CDPHealthChecker for the CDP and get the net total value (liquidity)
             let cdp_id = cdp_bucket.non_fungible_local_id();
             let weft_market: Global<AnyComponent> = self.weft_market_address.into();
-            let cdp_health = weft_market.call_raw::<CDPHealthChecker>("get_cdp", scrypto_args!(indexset![cdp_id]));
+
+            let cdp_health_map =
+                weft_market.call_raw::<IndexMap<NonFungibleLocalId, CDPHealthChecker>>("get_cdp", scrypto_args!(indexset![cdp_id.clone()]));
+            let cdp_health = cdp_health_map.get(&cdp_id.clone()).unwrap();
 
             let liquidity = cdp_health.total_collateral_value.checked_sub(cdp_health.total_loan_value).unwrap();
 
@@ -579,6 +588,8 @@ mod yield_multiplier_weftv2_cluster {
 
         //] Private
         fn __validate_user(&self, user_badge: NonFungibleProof) -> CheckedNonFungibleProof {
+            // assert_eq!(user_badge.resource_address(), self.user_resource, "Invalid user badge resource address");
+
             let valid_user = user_badge.check_with_message(self.user_resource, "User badge not valid");
             assert_eq!(valid_user.amount(), dec!(1), "Invalid user badge quantity");
 
@@ -615,10 +626,10 @@ mod yield_multiplier_weftv2_cluster {
             }
 
             //? Check for (unlikely) invalid CDP states
-            if cdp.loans.len() == 1 && cdp.collaterals.len() == 0 {
-                info!("Invalid CDP state: 1 loan, 0 collateral");
-                return false;
-            }
+            // if cdp.loans.len() == 1 && cdp.collaterals.len() == 0 {
+            //     info!("Invalid CDP state: 1 loan, 0 collateral");
+            //     return false;
+            // }
 
             // Validate that all supply and debt assets are valid
             for (&resource, _) in cdp.collaterals.iter() {
