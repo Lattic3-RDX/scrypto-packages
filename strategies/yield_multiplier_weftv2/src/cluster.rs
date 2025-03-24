@@ -519,7 +519,7 @@ mod yield_multiplier_weftv2_cluster {
         /// - A `FungibleBucket` containing the excess fee repayment.
         pub fn end_execution(
             &mut self,
-            user_badge: NonFungibleProof,
+            // user_badge: NonFungibleProof,
             cdp_bucket: NonFungibleBucket,
             terms_bucket: NonFungibleBucket,
             mut fee_payment: FungibleBucket,
@@ -528,8 +528,8 @@ mod yield_multiplier_weftv2_cluster {
             assert_eq!(self.link.amount(), dec!(1), "Cluster does not have a link badge");
 
             // Validate the user's badge
-            let valid_user = self.__validate_user(user_badge);
-            let user_id = valid_user.non_fungible_local_id();
+            // let valid_user = self.__validate_user(user_badge);
+            // let user_id = valid_user.non_fungible_local_id();
 
             // Validate the execution terms
             assert_eq!(terms_bucket.amount(), dec!(1), "Invalid execution terms amount; must contain 1 NFT");
@@ -540,12 +540,13 @@ mod yield_multiplier_weftv2_cluster {
             );
 
             let term_data: ExecutionTerms = terms_bucket.non_fungible().data();
+            let user_id = term_data.user_local_id;
             let cdp_id = cdp_bucket.non_fungible_local_id();
 
-            assert_eq!(
-                term_data.user_local_id, user_id,
-                "Presented user badge does not match the execution terms"
-            );
+            // assert_eq!(
+            //     term_data.user_local_id, user_id,
+            //     "Presented user badge does not match the execution terms"
+            // );
             assert_eq!(term_data.cdp_id, cdp_id, "Presented CDP does not match the execution terms");
 
             // let local_id = terms_bucket.non_fungible_local_id();
