@@ -1,6 +1,7 @@
 /* ------------------ Imports ----------------- */
 // Modules
 use crate::accounts::AccountData;
+use crate::fees::FeePoints;
 use crate::info::{AccountInfo, ClusterInfo};
 use crate::services::{ClusterService, ClusterServiceManager};
 use crate::weft::*;
@@ -56,7 +57,6 @@ type Unit = ();
     LoanInfo
 )]
 mod yield_multiplier_weftv2_cluster {
-    use crate::fees::{self, FeePoints};
 
     //] --------------- Scrypto Setup -------------- */
     enable_method_auth! {
