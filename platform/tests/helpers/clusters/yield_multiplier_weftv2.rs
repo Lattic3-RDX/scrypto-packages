@@ -56,12 +56,12 @@ impl YMWeftV2ClusterFactory {
 
         // Collect output
         let component = receipt.expect_commit_success().new_component_addresses()[0];
-        let execution_terms = receipt.expect_commit_success().new_resource_addresses()[0];
+        // let execution_terms = receipt.expect_commit_success().new_resource_addresses()[0];
 
-        println!("Execution Terms: {:?}\n", execution_terms,);
+        // println!("Execution Terms: {:?}\n", execution_terms,);
 
         // Return YMWeftV2Cluster
-        YMWeftV2Cluster { component, platform, link_badge, user_badge, supply, debt, execution_terms, cdp }
+        YMWeftV2Cluster { component, platform, link_badge, user_badge, supply, debt, cdp }
     }
 }
 
@@ -77,7 +77,6 @@ pub struct YMWeftV2Cluster {
     // Cluster
     pub supply: ResourceAddress,
     pub debt: ResourceAddress,
-    pub execution_terms: ResourceAddress,
     // WeftV2 integration
     pub cdp: ResourceAddress,
 }

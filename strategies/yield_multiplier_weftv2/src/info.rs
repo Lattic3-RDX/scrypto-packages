@@ -21,4 +21,5 @@ pub struct AccountInfo {
     pub debt: Decimal,
     pub debt_value: Decimal,
     pub health: Decimal,
+    pub platform_fee_due: Decimal,
 }
