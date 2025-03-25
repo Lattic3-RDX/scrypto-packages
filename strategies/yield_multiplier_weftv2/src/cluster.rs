@@ -197,7 +197,7 @@ mod yield_multiplier_weftv2_cluster {
                 account_count: 0,
                 execution_term_manager,
                 services: ClusterServiceManager::new(),
-                fee_rate: dec!(0.005),
+                fee_rate: dec!(10),
                 fee_vault: FungibleVault::new(XRD),
                 weft_market_address,
                 cdp_manager: cdp_resource.into(),
@@ -483,17 +483,21 @@ mod yield_multiplier_weftv2_cluster {
             // assert!(cdp_bucket.amount() == dec!(1), "Invalid CDP amount; must contain 1 NFT");
 
             // Get the CDPHealthChecker for the CDP and get the net total value (liquidity)
-            let cdp_id = cdp_bucket.non_fungible_local_id();
-            let weft_market: Global<AnyComponent> = self.weft_market_address.into();
+            // let cdp_id = cdp_bucket.non_fungible_local_id();
+            // let weft_market: Global<AnyComponent> = self.weft_market_address.into();
 
-            let cdp_health_map =
-                weft_market.call_raw::<IndexMap<NonFungibleLocalId, CDPHealthChecker>>("get_cdp", scrypto_args!(indexset![cdp_id.clone()]));
-            let cdp_health = cdp_health_map.get(&cdp_id.clone()).unwrap();
+            // let cdp_health_map =
+            //     weft_market.call_raw::<IndexMap<NonFungibleLocalId, CDPHealthChecker>>("get_cdp", scrypto_args!(indexset![cdp_id.clone()]));
+            // let cdp_health = cdp_health_map.get(&cdp_id.clone()).unwrap();
 
-            let liquidity = cdp_health.total_collateral_value.checked_sub(cdp_health.total_loan_value).unwrap();
+            // let liquidity = cdp_health.total_collateral_value.checked_sub(cdp_health.total_loan_value).unwrap();
 
             // Mint the execution terms
-            let execution_terms = ExecutionTerms::new(cdp_bucket.non_fungible_local_id(), local_id, liquidity);
+            let execution_terms = ExecutionTerms::new(
+                cdp_bucket.non_fungible_local_id(),
+                local_id,
+                // liquidity
+            );
             let terms_bucket = self.execution_term_manager.mint_ruid_non_fungible(execution_terms);
 
             // Return CDP and execution terms
@@ -550,9 +554,6 @@ mod yield_multiplier_weftv2_cluster {
             // );
             assert_eq!(term_data.cdp_id, cdp_id, "Presented CDP does not match the execution terms");
 
-            // let local_id = terms_bucket.non_fungible_local_id();
-            // let execution_terms: ExecutionTerms = self.execution_term_manager.get_non_fungible_data(&local_id);
-
             // Validate the cdp
             assert_eq!(cdp_bucket.amount(), dec!(1), "Invalid CDP amount; must contain 1 NFT");
             // assert_eq!(cdp_bucket.resource_address(), self.cdp_manager.address(), "Invalid CDP resource address");
@@ -562,25 +563,25 @@ mod yield_multiplier_weftv2_cluster {
             assert!(cdp_valid, "Invalid CDP");
 
             // Get the CDPHealthChecker for the CDP and get the net total value (liquidity)
-            let weft_market: Global<AnyComponent> = self.weft_market_address.into();
-            let cdp_health_map =
-                weft_market.call_raw::<IndexMap<NonFungibleLocalId, CDPHealthChecker>>("get_cdp", scrypto_args!(indexset![cdp_id.clone()]));
-            let cdp_health = cdp_health_map.get(&cdp_id.clone()).unwrap();
+            // let weft_market: Global<AnyComponent> = self.weft_market_address.into();
+            // let cdp_health_map =
+            //     weft_market.call_raw::<IndexMap<NonFungibleLocalId, CDPHealthChecker>>("get_cdp", scrypto_args!(indexset![cdp_id.clone()]));
+            // let cdp_health = cdp_health_map.get(&cdp_id.clone()).unwrap();
 
             // Validate the fee payment
-            let liquidity = cdp_health.total_collateral_value.checked_sub(cdp_health.total_loan_value).unwrap();
-            let fee_amount = liquidity
-                .checked_sub(term_data.cdp_liquidity)
-                .unwrap()
-                .checked_abs()
-                .unwrap()
-                .checked_mul(self.fee_rate)
-                .unwrap();
+            // let liquidity = cdp_health.total_collateral_value.checked_sub(cdp_health.total_loan_value).unwrap();
+            // let fee_amount = liquidity
+            //     .checked_sub(term_data.cdp_liquidity)
+            //     .unwrap()
+            //     .checked_abs()
+            //     .unwrap()
+            //     .checked_mul(self.fee_rate)
+            //     .unwrap();
 
             // assert_eq!(fee_payment.resource_address(), XRD, "Fee repayment must be in XRD");
             // assert!(fee_payment.amount() >= fee_amount, "Fee repayment is less than calculated");
 
-            self.fee_vault.put(fee_payment.take(fee_amount));
+            self.fee_vault.put(fee_payment.take(self.fee_rate));
 
             // Return the CDP
             self.accounts.get_mut(&user_id).expect("User has no open account").put(cdp_bucket);
