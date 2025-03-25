@@ -83,47 +83,6 @@ fn test_valid_get_cluster_info_unlinked() {
     receipt.expect_commit_success();
 }
 
-#[test]
-fn test_a() {
-    //] Arrange
-    // Create a test runner and platform
-    let (mut runner, platform) = Runner::new_base();
-    let owner_account = runner.owner_account;
-
-    // Instantiate a YieldMultiplierWeftCluster
-    let weftv2 = MockWeftV2::new(&mut runner);
-    let ym_weftv2_cluster_factory = YMWeftV2ClusterFactory::new(&mut runner.ledger);
-
-    let owner_rule = rule!(require(platform.owner_badge));
-    let supply = runner.faucet.usdt.address;
-    let debt = runner.faucet.xwbtc.address;
-
-    let cluster = ym_weftv2_cluster_factory.instantiate(
-        &mut runner,
-        owner_rule,
-        platform.component,
-        platform.link_badge,
-        platform.user_badge,
-        supply,
-        debt,
-        weftv2.cdp,
-    );
-
-    //] Act & Assert
-    // Link cluster to platform
-    platform.link(&mut runner, &owner_account, cluster.component);
-
-    // Get cluster info
-    // let manifest = ManifestBuilder::new()
-    //     .lock_fee_from_faucet()
-    //     .call_method(cluster.component, "get_cluster_info", manifest_args!());
-    // let receipt = runner.exec_and_dump("get_cluster_info", manifest, &owner_account, Some("clusters/yield_multiplier_weftv2"));
-
-    // receipt.expect_commit_success();
-
-    // let manifest = TransactionV2Builder
-}
-
 /* ------------------ Account ----------------- */
 #[test]
 #[ignore = "Requires mainnet"]

@@ -13,11 +13,6 @@ pub struct ClusterInfo {
     pub account_count: u64,
 }
 
-#[derive(ScryptoSbor, ScryptoEvent, Debug, Clone)]
-pub struct EventClusterInfo {
-    pub info: ClusterInfo,
-}
-
 /* ------------------ Account ----------------- */
 #[derive(ScryptoSbor, Debug, Clone)]
 pub struct AccountInfo {
@@ -27,9 +22,4 @@ pub struct AccountInfo {
     pub debt: Decimal,
     pub debt_value: Decimal,
     pub health: Decimal,
-}
-
-#[derive(ScryptoSbor, ScryptoEvent, Debug, Clone)]
-pub struct EventAccountInfo {
-    pub info: AccountInfo,
 }
