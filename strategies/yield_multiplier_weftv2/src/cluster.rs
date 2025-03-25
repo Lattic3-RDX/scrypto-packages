@@ -477,7 +477,7 @@ mod yield_multiplier_weftv2_cluster {
                 supply_value: cdp_health.total_collateral_value,
                 debt,
                 debt_value: cdp_health.total_loan_value,
-                health: cdp_health.health_ltv,
+                health: cdp_health.liquidation_ltv,
                 platform_fee_due,
             };
 
