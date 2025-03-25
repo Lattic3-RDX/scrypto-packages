@@ -15,6 +15,11 @@ use std::panic::catch_unwind;
 /* ----------------- Blueprint ---------------- */
 type Unit = ();
 
+#[derive(NonFungibleData, ScryptoSbor)]
+pub struct ExecutionTerms {
+    pub user_id: NonFungibleLocalId,
+}
+
 #[blueprint]
 #[types(
     // General
@@ -29,6 +34,7 @@ type Unit = ();
     u64,
     i64,
     FeePoints,
+    ExecutionTerms,
     // Services
     ClusterServiceManager,
     ClusterService,
@@ -73,11 +79,13 @@ mod yield_multiplier_weftv2_cluster {
             update_service              => restrict_to: [can_manage_services, can_lock_services];
             update_service_and_set_lock => restrict_to: [can_lock_services];
             set_fee_points => restrict_to: [can_manage_fees];
-            collect_fees       => restrict_to: [can_manage_fees];
+            collect_fees   => restrict_to: [can_manage_fees];
             // Accounts
             open_account     => PUBLIC;
             close_account    => PUBLIC;
             get_account_info => PUBLIC;
+            start_execution  => PUBLIC;
+            end_execution    => PUBLIC;
         }
     }
 
@@ -93,6 +101,7 @@ mod yield_multiplier_weftv2_cluster {
         supply: ResourceAddress,
         debt: ResourceAddress,
         services: ClusterServiceManager,
+        execution_term_manager: NonFungibleResourceManager,
         // Accounts
         accounts: KeyValueStore<NonFungibleLocalId, AccountData>,
         account_count: u64,
@@ -139,10 +148,25 @@ mod yield_multiplier_weftv2_cluster {
 
             //] Authorisation
             // Component
-            // let component_access_rule: AccessRule = rule!(require(global_caller(component_address)));
+            let component_access_rule: AccessRule = rule!(require(global_caller(component_address)));
 
             // Component owner
             let owner_role: OwnerRole = OwnerRole::Fixed(owner_rule.clone());
+
+            let execution_term_manager = ResourceBuilder::new_ruid_non_fungible::<ExecutionTerms>(owner_role.clone())
+                .mint_roles(mint_roles! {
+                    minter         => component_access_rule.clone();
+                    minter_updater => rule!(deny_all);
+                })
+                .burn_roles(burn_roles! {
+                    burner         => component_access_rule.clone();
+                    burner_updater => rule!(deny_all);
+                })
+                .deposit_roles(deposit_roles! {
+                    depositor         => rule!(deny_all);
+                    depositor_updater => rule!(deny_all);
+                })
+                .create_with_no_initial_supply();
 
             //] Component Instantisation
             // Metadata
@@ -179,6 +203,7 @@ mod yield_multiplier_weftv2_cluster {
                 debt,
                 accounts: KeyValueStore::new(),
                 account_count: 0,
+                execution_term_manager,
                 services: ClusterServiceManager::new(),
                 fee_points: FeePoints::new(),
                 fee_vault: FungibleVault::new(XRD),
@@ -269,6 +294,7 @@ mod yield_multiplier_weftv2_cluster {
                 supply_res: self.supply,
                 debt_res: self.debt,
                 account_count: self.account_count,
+                execution_term_manager: self.execution_term_manager,
             };
 
             // Runtime::emit_event(EventClusterInfo { info: info.clone() });
@@ -338,7 +364,7 @@ mod yield_multiplier_weftv2_cluster {
             assert_eq!(self.link.amount(), dec!(1), "Cluster does not have a link badge");
 
             // Validate the CDP
-            assert_eq!(cdp.amount(), dec!(1), "Invalid CDP amount; must contain 1 NFT");
+            // assert_eq!(cdp.amount(), dec!(1), "Invalid CDP amount; must contain 1 NFT");
             // assert_eq!(cdp.resource_address(), self.cdp_manager.address(), "Invalid CDP resource address");
 
             let cdp_id = cdp.non_fungible_local_id();
@@ -390,7 +416,7 @@ mod yield_multiplier_weftv2_cluster {
             assert!(self.account_count > 0, "No accounts to close");
 
             // Validate own link badge
-            assert_eq!(self.link.amount(), dec!(1), "Cluster does not have a link badge");
+            // assert_eq!(self.link.amount(), dec!(1), "Cluster does not have a link badge");
 
             // Validate the user
             let valid_user = self.__validate_user(user_badge);
@@ -400,12 +426,11 @@ mod yield_multiplier_weftv2_cluster {
             let fee_amount = self.__platform_fee_due(user_id.clone());
             self.fee_vault.put(fee_payment.take(fee_amount));
 
+            // Extract the CDP and remove it from the cluster
+            let cdp_bucket = self.accounts.get_mut(&user_id).expect("User has no open account").cdp_vault.take_all();
+
             // Update the user's badge
             self.__with_link(|platform, link_badge| platform.call_raw("close_account", scrypto_args!(link_badge, user_id)));
-
-            // Extract the CDP and remove it from the cluster
-            let local_id = valid_user.non_fungible_local_id();
-            let cdp_bucket = self.accounts.get_mut(&local_id).unwrap().cdp_vault.take_all();
 
             self.account_count -= 1;
 
@@ -458,6 +483,37 @@ mod yield_multiplier_weftv2_cluster {
 
             // Runtime::emit_event(EventAccountInfo { info: info.clone() });
             info
+        }
+
+        pub fn start_execution(&mut self, user_badge: NonFungibleProof) -> (NonFungibleBucket, NonFungibleBucket) {
+            assert!(self.services.get(ClusterService::Execute), "ClusterService::StartExecution disabled");
+
+            let user_id = self.__validate_user(user_badge).non_fungible_local_id();
+            let cdp_bucket = self.accounts.get_mut(&user_id).expect("User has no open account").cdp_vault.take_all();
+
+            let execution_terms = self.execution_term_manager.mint_ruid_non_fungible(ExecutionTerms { user_id });
+
+            (cdp_bucket, execution_terms)
+        }
+
+        pub fn end_execution(&mut self, cdp_bucket: NonFungibleBucket, terms_bucket: NonFungibleBucket) {
+            assert!(self.execution_term_manager.address() == terms_bucket.resource_address());
+
+            let user_id = terms_bucket.non_fungible::<ExecutionTerms>().data().user_id;
+
+            let cdp_id = cdp_bucket.non_fungible_local_id();
+            let cdp_valid = self.__validate_cdp(cdp_id.clone());
+            assert!(cdp_valid, "Invalid CDP");
+
+            // Return the CDP
+            self.accounts
+                .get_mut(&user_id)
+                .expect("User has no open account")
+                .cdp_vault
+                .put(cdp_bucket);
+
+            // Burn the terms
+            self.execution_term_manager.burn(terms_bucket);
         }
 
         //] Private

@@ -10,6 +10,7 @@ pub struct ClusterInfo {
     pub supply_res: ResourceAddress,
     pub debt_res: ResourceAddress,
     pub account_count: u64,
+    pub execution_term_manager: NonFungibleResourceManager,
 }
 
 /* ------------------ Account ----------------- */
