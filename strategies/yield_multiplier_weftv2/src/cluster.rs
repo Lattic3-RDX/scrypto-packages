@@ -1,11 +1,14 @@
 /* ------------------ Imports ----------------- */
-use crate::execution::ExecutionTerms;
+// Modules
+use crate::accounts::AccountData;
 use crate::info::{AccountInfo, ClusterInfo};
 use crate::services::{ClusterService, ClusterServiceManager};
 use crate::weft::*;
+// Shared Modules
+use shared::services::{ServiceValue, SetLock};
+use shared::utils::{now, SECONDS_PER_YEAR};
+// Libraries
 use scrypto::prelude::*;
-use shared::services::ServiceValue;
-use shared::services::SetLock;
 use std::panic::catch_unwind;
 
 /* ----------------- Blueprint ---------------- */
@@ -23,8 +26,8 @@ type Unit = ();
     FungibleVault,
     Decimal,
     u64,
+    i64,
     BlueprintId,
-    ExecutionTerms,
     // Services
     ClusterServiceManager,
     ClusterService,
@@ -74,10 +77,6 @@ mod yield_multiplier_weftv2_cluster {
             open_account     => PUBLIC;
             close_account    => PUBLIC;
             get_account_info => PUBLIC;
-            start_execution  => PUBLIC;
-            end_execution    => PUBLIC;
-            // WeftV2 Integration
-            validate_cdp => PUBLIC;
         }
     }
 
@@ -92,10 +91,11 @@ mod yield_multiplier_weftv2_cluster {
         // Cluster
         supply: ResourceAddress,
         debt: ResourceAddress,
-        accounts: KeyValueStore<NonFungibleLocalId, NonFungibleVault>,
-        account_count: u64,
-        execution_term_manager: NonFungibleResourceManager,
         services: ClusterServiceManager,
+        // Accounts
+        accounts: KeyValueStore<NonFungibleLocalId, AccountData>,
+        account_count: u64,
+        // Fees
         fee_rate: Decimal,
         fee_vault: FungibleVault,
         // Integration
@@ -138,26 +138,10 @@ mod yield_multiplier_weftv2_cluster {
 
             //] Authorisation
             // Component
-            let component_access_rule: AccessRule = rule!(require(global_caller(component_address)));
+            // let component_access_rule: AccessRule = rule!(require(global_caller(component_address)));
 
             // Component owner
             let owner_role: OwnerRole = OwnerRole::Fixed(owner_rule.clone());
-
-            // Execution term manager
-            let execution_term_manager = ResourceBuilder::new_ruid_non_fungible::<ExecutionTerms>(owner_role.clone())
-                .mint_roles(mint_roles! {
-                    minter         => component_access_rule.clone();
-                    minter_updater => rule!(deny_all);
-                })
-                .burn_roles(burn_roles! {
-                    burner         => component_access_rule.clone();
-                    burner_updater => rule!(deny_all);
-                })
-                .deposit_roles(deposit_roles! {
-                    depositor         => rule!(deny_all);
-                    depositor_updater => rule!(deny_all);
-                })
-                .create_with_no_initial_supply();
 
             //] Component Instantisation
             // Metadata
@@ -173,7 +157,6 @@ mod yield_multiplier_weftv2_cluster {
                     "description"     => "Lattic3 cluster component for the Yield Multiplier strategy, built on top of the Weft V2 lending platform.", locked;
                     "supply"          => supply, locked;
                     "debt"            => debt, locked;
-                    "execution_terms" => execution_term_manager.address(), locked;
                     // "dapp_definition" => dapp_definition_address, updatable;
                 }
             };
@@ -195,9 +178,8 @@ mod yield_multiplier_weftv2_cluster {
                 debt,
                 accounts: KeyValueStore::new(),
                 account_count: 0,
-                execution_term_manager,
                 services: ClusterServiceManager::new(),
-                fee_rate: dec!(10),
+                fee_rate: dec!(0.01),
                 fee_vault: FungibleVault::new(XRD),
                 weft_market_address,
                 cdp_manager: cdp_resource.into(),
@@ -285,7 +267,6 @@ mod yield_multiplier_weftv2_cluster {
                 linked: self.link.amount() > dec!(0),
                 supply_res: self.supply,
                 debt_res: self.debt,
-                execution_term_res: self.execution_term_manager.address(),
                 account_count: self.account_count,
             };
 
@@ -356,7 +337,8 @@ mod yield_multiplier_weftv2_cluster {
             assert_eq!(cdp.amount(), dec!(1), "Invalid CDP amount; must contain 1 NFT");
             // assert_eq!(cdp.resource_address(), self.cdp_manager.address(), "Invalid CDP resource address");
 
-            let cdp_valid = self.validate_cdp(cdp.non_fungible_local_id());
+            let cdp_id = cdp.non_fungible_local_id();
+            let cdp_valid = self.__validate_cdp(cdp_id.clone());
             assert!(cdp_valid, "Invalid CDP");
 
             // Update the user's badge
@@ -365,13 +347,18 @@ mod yield_multiplier_weftv2_cluster {
             self.__with_link(|platform, link_badge| platform.call_raw("open_account", scrypto_args!(link_badge, user_id.clone())));
 
             // Add the CDP to the cluster
-            if self.accounts.get(&user_id).is_some() {
-                let mut vault = self.accounts.get_mut(&user_id).unwrap();
-                assert!(vault.amount() == dec!(0), "User already has an account");
+            let liquidity = self.__get_cdp_liquidity(cdp_id.clone());
 
-                vault.put(cdp);
+            if self.accounts.get(&user_id).is_some() {
+                let mut account = self.accounts.get_mut(&user_id).unwrap();
+                assert!(account.cdp_vault.amount() == dec!(0), "User already has an account");
+
+                account.cdp_vault.put(cdp);
+                account.updated_at = now();
+                account.initial_liquidity = liquidity;
             } else {
-                self.accounts.insert(user_id, NonFungibleVault::with_bucket(cdp));
+                let account = AccountData::new(NonFungibleVault::with_bucket(cdp), liquidity);
+                self.accounts.insert(user_id, account);
             }
 
             // Update the account count
@@ -390,7 +377,7 @@ mod yield_multiplier_weftv2_cluster {
         ///
         /// # Returns
         /// - A `NonFungibleBucket` containing the CDP.
-        pub fn close_account(&mut self, user_badge: NonFungibleProof) -> NonFungibleBucket {
+        pub fn close_account(&mut self, user_badge: NonFungibleProof, fee: FungibleBucket) -> NonFungibleBucket {
             // Check operating service
             assert!(self.services.get(ClusterService::CloseAccount), "ClusterService::CloseAccount disabled");
             assert!(self.account_count > 0, "No accounts to close");
@@ -405,7 +392,7 @@ mod yield_multiplier_weftv2_cluster {
 
             // Extract the CDP and remove it from the cluster
             let local_id = valid_user.non_fungible_local_id();
-            let cdp_bucket = self.accounts.get_mut(&local_id).expect("User has no open account").take_all();
+            let cdp_bucket = self.accounts.get_mut(&local_id).expect("User has no open account").cdp_vault.take_all();
 
             self.account_count -= 1;
 
@@ -423,10 +410,12 @@ mod yield_multiplier_weftv2_cluster {
         /// # Emits
         /// - `EventAccountInfo`: contains the same information as the returned `AccountInfo` struct.
         pub fn get_account_info(&self, local_id: NonFungibleLocalId) -> AccountInfo {
-            let cdp_id = self.accounts.get(&local_id).expect("User has no open account").non_fungible_local_id();
-            let weft_market: Global<AnyComponent> = self.weft_market_address.into();
+            let account = self.accounts.get(&local_id).expect("User has no open account");
 
             // Fetch and parse the CDP
+            let cdp_id = account.cdp_vault.non_fungible_local_id();
+            let weft_market: Global<AnyComponent> = self.weft_market_address.into();
+
             let cdp_health_map =
                 weft_market.call_raw::<IndexMap<NonFungibleLocalId, CDPHealthChecker>>("get_cdp", scrypto_args!(indexset![cdp_id.clone()]));
             let cdp_health = cdp_health_map.get(&cdp_id.clone()).unwrap();
@@ -454,145 +443,6 @@ mod yield_multiplier_weftv2_cluster {
             info
         }
 
-        /// Starts a transaction execution with the user's CDP; must execute in one transaction, and fit requirements as per the ExecutionTerms.
-        ///
-        /// # Parameters
-        /// - `user_badge`: Proof of the user's badge from the platform.
-        ///
-        /// # Panics
-        /// - If the cluster is not linked.
-        /// - If the ClusterService::Execute is disabled.
-        /// - If the user does not have an account.
-        ///
-        /// # Returns
-        /// - A `NonFungibleBucket` containing the CDP
-        /// - A `NonFungibleBucket` containing the execution terms
-        pub fn start_execution(&mut self, user_badge: NonFungibleProof) -> (NonFungibleBucket, NonFungibleBucket) {
-            // Check operating service
-            assert!(self.services.get(ClusterService::Execute), "ClusterService::Execute disabled");
-
-            // Validate own link badge
-            assert_eq!(self.link.amount(), dec!(1), "Cluster does not have a link badge");
-
-            // Validate the user's badge and get the CDP
-            let valid_user = self.__validate_user(user_badge);
-
-            let local_id = valid_user.non_fungible_local_id();
-            let cdp_bucket = self.accounts.get_mut(&local_id).expect("User has no open account").take_all();
-
-            // assert!(cdp_bucket.amount() == dec!(1), "Invalid CDP amount; must contain 1 NFT");
-
-            // Get the CDPHealthChecker for the CDP and get the net total value (liquidity)
-            // let cdp_id = cdp_bucket.non_fungible_local_id();
-            // let weft_market: Global<AnyComponent> = self.weft_market_address.into();
-
-            // let cdp_health_map =
-            //     weft_market.call_raw::<IndexMap<NonFungibleLocalId, CDPHealthChecker>>("get_cdp", scrypto_args!(indexset![cdp_id.clone()]));
-            // let cdp_health = cdp_health_map.get(&cdp_id.clone()).unwrap();
-
-            // let liquidity = cdp_health.total_collateral_value.checked_sub(cdp_health.total_loan_value).unwrap();
-
-            // Mint the execution terms
-            let execution_terms = ExecutionTerms::new(
-                cdp_bucket.non_fungible_local_id(),
-                local_id,
-                // liquidity
-            );
-            let terms_bucket = self.execution_term_manager.mint_ruid_non_fungible(execution_terms);
-
-            // Return CDP and execution terms
-            (cdp_bucket, terms_bucket)
-        }
-
-        /// Ends a transaction execution with the user's CDP; must satisfy the execution terms and repayment.
-        ///
-        /// # Parameters
-        /// - `user_badge`: Proof of the user's badge from the platform.
-        /// - `cdp_bucket`: The CDP to end the execution with.
-        /// - `terms_bucket`: The execution terms to validate and burn.
-        /// - `fee_payment`: The fee repayment to validate and collect.
-        ///
-        /// # Panics
-        /// - If the cluster is not linked.
-        /// - If the ClusterService::Execute is disabled.
-        /// - If the user does not have an account.
-        /// - If the CDP is invalid.
-        /// - If the execution terms are invalid.
-        /// - If the fee repayment is invalid.
-        ///
-        /// # Returns
-        /// - A `FungibleBucket` containing the excess fee repayment.
-        pub fn end_execution(
-            &mut self,
-            // user_badge: NonFungibleProof,
-            cdp_bucket: NonFungibleBucket,
-            terms_bucket: NonFungibleBucket,
-            mut fee_payment: FungibleBucket,
-        ) -> FungibleBucket {
-            // Validate own link badge
-            // assert_eq!(self.link.amount(), dec!(1), "Cluster does not have a link badge");
-
-            // Validate the user's badge
-            // let valid_user = self.__validate_user(user_badge);
-            // let user_id = valid_user.non_fungible_local_id();
-
-            // Validate the execution terms
-            // assert_eq!(terms_bucket.amount(), dec!(1), "Invalid execution terms amount; must contain 1 NFT");
-            assert_eq!(
-                terms_bucket.resource_address(),
-                self.execution_term_manager.address(),
-                "Invalid execution terms resource address"
-            );
-
-            let term_data: ExecutionTerms = terms_bucket.non_fungible().data();
-            let user_id = term_data.user_local_id;
-            let cdp_id = cdp_bucket.non_fungible_local_id();
-
-            // assert_eq!(
-            //     term_data.user_local_id, user_id,
-            //     "Presented user badge does not match the execution terms"
-            // );
-            assert_eq!(term_data.cdp_id, cdp_id, "Presented CDP does not match the execution terms");
-
-            // Validate the cdp
-            assert_eq!(cdp_bucket.amount(), dec!(1), "Invalid CDP amount; must contain 1 NFT");
-            // assert_eq!(cdp_bucket.resource_address(), self.cdp_manager.address(), "Invalid CDP resource address");
-
-            let cdp_id = cdp_bucket.non_fungible_local_id();
-            let cdp_valid = self.validate_cdp(cdp_id.clone());
-            assert!(cdp_valid, "Invalid CDP");
-
-            // Get the CDPHealthChecker for the CDP and get the net total value (liquidity)
-            // let weft_market: Global<AnyComponent> = self.weft_market_address.into();
-            // let cdp_health_map =
-            //     weft_market.call_raw::<IndexMap<NonFungibleLocalId, CDPHealthChecker>>("get_cdp", scrypto_args!(indexset![cdp_id.clone()]));
-            // let cdp_health = cdp_health_map.get(&cdp_id.clone()).unwrap();
-
-            // Validate the fee payment
-            // let liquidity = cdp_health.total_collateral_value.checked_sub(cdp_health.total_loan_value).unwrap();
-            // let fee_amount = liquidity
-            //     .checked_sub(term_data.cdp_liquidity)
-            //     .unwrap()
-            //     .checked_abs()
-            //     .unwrap()
-            //     .checked_mul(self.fee_rate)
-            //     .unwrap();
-
-            // assert_eq!(fee_payment.resource_address(), XRD, "Fee repayment must be in XRD");
-            // assert!(fee_payment.amount() >= fee_amount, "Fee repayment is less than calculated");
-
-            self.fee_vault.put(fee_payment.take(self.fee_rate));
-
-            // Return the CDP
-            self.accounts.get_mut(&user_id).expect("User has no open account").put(cdp_bucket);
-
-            // Burn the terms
-            self.execution_term_manager.burn(terms_bucket);
-
-            // Return excess fee repayment
-            fee_payment
-        }
-
         //] Private
         fn __validate_user(&self, user_badge: NonFungibleProof) -> CheckedNonFungibleProof {
             // assert_eq!(user_badge.resource_address(), self.user_resource, "Invalid user badge resource address");
@@ -603,8 +453,39 @@ mod yield_multiplier_weftv2_cluster {
             valid_user
         }
 
+        fn __calculate_close_fee(&mut self, user_id: NonFungibleLocalId) -> Decimal {
+            let account = self.accounts.get(&user_id).expect("User has no open account");
+
+            let cdp_id = account.cdp_vault.non_fungible_local_id();
+            let liquidity = self.__get_cdp_liquidity(cdp_id);
+
+            let time_delta = now() - account.updated_at;
+            let liquidity_delta = liquidity.checked_sub(account.initial_liquidity).unwrap();
+            let percentage_change = liquidity_delta.checked_div(account.initial_liquidity).unwrap();
+
+            // Assume user got liquidated if CDP value dropped by 50%+
+            // If liquidated, fee is 0 and initial liquidity is reset
+            if percentage_change <= dec!(-0.5) {
+                drop(account);
+
+                let mut updated_account = self.accounts.get_mut(&user_id).expect("User has no open account");
+                updated_account.updated_at = now();
+                updated_account.initial_liquidity = liquidity;
+
+                dec!(0)
+            } else {
+                liquidity
+                    .checked_abs()
+                    .unwrap()
+                    .checked_mul(time_delta / SECONDS_PER_YEAR)
+                    .unwrap()
+                    .checked_mul(self.fee_rate)
+                    .unwrap()
+            }
+        }
+
         //] ------------------- Weft ------------------- */
-        pub fn validate_cdp(&self, local_id: NonFungibleLocalId) -> bool {
+        fn __validate_cdp(&self, local_id: NonFungibleLocalId) -> bool {
             // Parse CDP data or return false if fetching the data panics
             // Panic occurs if the cdp_manager cannot find an NFT with a matching local_id
             let cdp: CDPData = match catch_unwind(|| self.cdp_manager.get_non_fungible_data::<CDPData>(&local_id)) {
@@ -654,6 +535,16 @@ mod yield_multiplier_weftv2_cluster {
             }
 
             true
+        }
+
+        fn __get_cdp_liquidity(&self, local_id: NonFungibleLocalId) -> Decimal {
+            let weft_market: Global<AnyComponent> = self.weft_market_address.into();
+
+            let cdp_health_map: IndexMap<NonFungibleLocalId, CDPHealthChecker> =
+                weft_market.call_raw("get_cdp", scrypto_args!(indexset![local_id.clone()]));
+            let cdp_health = cdp_health_map.get(&local_id.clone()).unwrap();
+
+            cdp_health.total_collateral_value.checked_sub(cdp_health.total_loan_value).unwrap()
         }
     }
 }

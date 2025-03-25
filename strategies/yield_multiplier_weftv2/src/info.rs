@@ -9,7 +9,6 @@ pub struct ClusterInfo {
     pub linked: bool,
     pub supply_res: ResourceAddress,
     pub debt_res: ResourceAddress,
-    pub execution_term_res: ResourceAddress,
     pub account_count: u64,
 }
 

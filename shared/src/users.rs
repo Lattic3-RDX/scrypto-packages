@@ -1,3 +1,6 @@
+// Modules
+use crate::utils::now;
+// Libraries
 use scrypto::prelude::*;
 
 #[derive(ScryptoSbor, Debug)]
@@ -18,13 +21,7 @@ pub struct User {
 
 impl User {
     pub fn new() -> Self {
-        let seconds_since_unix_epoch = Clock::current_time(TimePrecisionV2::Second).seconds_since_unix_epoch;
-
-        Self {
-            minted_at: Instant::new(seconds_since_unix_epoch),
-            accounts_in: IndexSet::new(),
-            open: 0,
-        }
+        Self { minted_at: Instant::new(now()), accounts_in: IndexSet::new(), open: 0 }
     }
 
     pub fn add_account(&mut self, cluster_address: ComponentAddress) {
