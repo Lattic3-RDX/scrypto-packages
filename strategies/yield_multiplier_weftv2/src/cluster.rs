@@ -78,8 +78,9 @@ mod yield_multiplier_weftv2_cluster {
             get_cluster_info => PUBLIC;
             update_service              => restrict_to: [can_manage_services, can_lock_services];
             update_service_and_set_lock => restrict_to: [can_lock_services];
-            set_fee_points => restrict_to: [can_manage_fees];
-            collect_fees   => restrict_to: [can_manage_fees];
+            set_fee_points                => restrict_to: [can_manage_fees];
+            set_fee_forgiveness_threshold => restrict_to: [can_manage_fees];
+            collect_fees                  => restrict_to: [can_manage_fees];
             // Accounts
             open_account     => PUBLIC;
             close_account    => PUBLIC;
@@ -107,6 +108,7 @@ mod yield_multiplier_weftv2_cluster {
         account_count: u64,
         // Fees
         fee_points: FeePoints,
+        fee_forgiveness_threshold: Decimal,
         fee_vault: FungibleVault,
         // Integration
         weft_market_address: ComponentAddress,
@@ -206,6 +208,7 @@ mod yield_multiplier_weftv2_cluster {
                 execution_term_manager,
                 services: ClusterServiceManager::new(),
                 fee_points: FeePoints::new(),
+                fee_forgiveness_threshold: dec!(-0.8),
                 fee_vault: FungibleVault::new(XRD),
                 weft_market_address,
                 cdp_manager: cdp_resource.into(),
@@ -334,6 +337,12 @@ mod yield_multiplier_weftv2_cluster {
         /// Breakpoints must be in order (i.e. p0.x < p1.x < p2.x).
         pub fn set_fee_points(&mut self, p0: Option<(Decimal, Decimal)>, p1: Option<(Decimal, Decimal)>, p2: Option<(Decimal, Decimal)>) {
             self.fee_points.set_fee_points(p0, p1, p2);
+        }
+
+        /// Sets the fee forgiveness threshold for the cluster.
+        /// If the liquidity change is within this percentage of the initial liquidity, the fee is set to 0.
+        pub fn set_fee_forgiveness_threshold(&mut self, threshold: Decimal) {
+            self.fee_forgiveness_threshold = threshold;
         }
 
         /// Collects fees from the fee vault.
@@ -485,22 +494,52 @@ mod yield_multiplier_weftv2_cluster {
             info
         }
 
+        /// Starts an execution on the cluster, allowing the user to perform arbitrary
+        /// interactions with the user's CDP. All operations must be executed within
+        /// one transaction, and the CPD must be returned to the user at the end by
+        /// calling the `end_execution` method.
+        ///
+        /// # Parameters
+        /// - `user_badge`: A `NonFungibleProof` of the user's badge.
+        ///
+        /// # Returns
+        /// - A `NonFungibleBucket` containing the user's CDP.
+        /// - A `NonFungibleBucket` containing the execution terms transient badge.
+        ///
+        /// # Panics
+        /// - If the cluster is not linked to the platform.
+        /// - If the ClusterService::Execute is disabled.
+        /// - If the user does not have an open account.
         pub fn start_execution(&mut self, user_badge: NonFungibleProof) -> (NonFungibleBucket, NonFungibleBucket) {
-            assert!(self.services.get(ClusterService::Execute), "ClusterService::StartExecution disabled");
+            // Check ClusterService::Execute enabled
+            assert!(self.services.get(ClusterService::Execute), "ClusterService::Execute disabled");
 
+            // Validate the user
             let user_id = self.__validate_user(user_badge).non_fungible_local_id();
-            let cdp_bucket = self.accounts.get_mut(&user_id).expect("User has no open account").cdp_vault.take_all();
 
+            // Return CDP and execution terms
+            let cdp_bucket = self.accounts.get_mut(&user_id).expect("User has no open account").cdp_vault.take_all();
             let execution_terms = self.execution_term_manager.mint_ruid_non_fungible(ExecutionTerms { user_id });
 
             (cdp_bucket, execution_terms)
         }
 
+        /// Counterpart to `start_execution`, returns the user's CDP to the cluster
+        /// and validates that the state of the CDP is valid.
+        ///
+        /// # Parameters
+        /// - `cdp_bucket`: A `NonFungibleBucket` containing the user's CDP.
+        /// - `terms_bucket`: A `NonFungibleBucket` containing the execution terms transient badge.
+        ///
+        /// # Panics
+        /// - If the user does not have an open account.
+        /// - If the CDP is invalid (wrong type, insufficient amount).
         pub fn end_execution(&mut self, cdp_bucket: NonFungibleBucket, terms_bucket: NonFungibleBucket) {
+            // Validate the execution terms
             assert!(self.execution_term_manager.address() == terms_bucket.resource_address());
-
             let user_id = terms_bucket.non_fungible::<ExecutionTerms>().data().user_id;
 
+            // Validate the CDP
             let cdp_id = cdp_bucket.non_fungible_local_id();
             let cdp_valid = self.__validate_cdp(cdp_id.clone());
             assert!(cdp_valid, "Invalid CDP");
@@ -512,11 +551,12 @@ mod yield_multiplier_weftv2_cluster {
                 .cdp_vault
                 .put(cdp_bucket);
 
-            // Burn the terms
+            // Burn the execution terms
             self.execution_term_manager.burn(terms_bucket);
         }
 
         //] Private
+        /// Validates the user's badge and returns the checked proof.
         fn __validate_user(&self, user_badge: NonFungibleProof) -> CheckedNonFungibleProof {
             // assert_eq!(user_badge.resource_address(), self.user_resource, "Invalid user badge resource address");
 
@@ -526,6 +566,14 @@ mod yield_multiplier_weftv2_cluster {
             valid_user
         }
 
+        /// Calculates the fee due for the user's account.
+        ///
+        /// The fee is calculated based on the difference in liquidity between the current CDP's liquidity
+        /// and the initial liquidity using the specified `fee_points`.
+        ///
+        /// If the liquidity of the user's CDP has dropped by `fee_forgiveness_threshold`% or more, the fee is 0.
+        ///
+        /// Returns the calculated fee as a decimal value.
         fn __platform_fee_due(&self, user_id: NonFungibleLocalId) -> Decimal {
             let account = self.accounts.get(&user_id).expect("User has no open account");
 
@@ -534,12 +582,15 @@ mod yield_multiplier_weftv2_cluster {
 
             let time_delta = (now() - account.updated_at) / SECONDS_PER_YEAR;
             let liquidity_delta = liquidity.checked_sub(account.initial_liquidity).unwrap();
+            let liquidity_percentage_change = liquidity_delta.checked_div(account.initial_liquidity).unwrap();
 
-            let fee_rate = self.fee_points.get_fee_rate(liquidity_delta);
-
-            if fee_rate == dec!(0) {
+            // If liquidity dropped by fee_forgiveness%, fee is 0
+            if liquidity_percentage_change <= self.fee_forgiveness_threshold {
                 dec!(0)
             } else {
+                // Using .checked_abs() to collect fee on profits/losses
+                let fee_rate = self.fee_points.get_fee_rate(liquidity_delta.checked_abs().unwrap());
+
                 liquidity
                     .checked_abs()
                     .unwrap()
@@ -551,6 +602,20 @@ mod yield_multiplier_weftv2_cluster {
         }
 
         //] ------------------- Weft ------------------- */
+        /// Validates the given CDP by checking its contents.
+        ///
+        /// # Parameters
+        /// - `local_id`: The local ID of the CDP to validate.
+        ///
+        /// # Returns
+        /// - `true` if the CDP is valid; otherwise, `false`.
+        ///
+        /// # Validation Criteria
+        /// - The CDP must have a valid ResourceAddress.
+        /// - The CDP must contain a maximum of one collateral asset and one loan asset.
+        /// - The CDP must not have any NFT collaterals.
+        /// - The collateral asset in the CDP must match the expected supply asset.
+        /// - The debt asset in the CDP must match the expected debt asset.
         fn __validate_cdp(&self, local_id: NonFungibleLocalId) -> bool {
             // Parse CDP data or return false if fetching the data panics
             // Panic occurs if the cdp_manager cannot find an NFT with a matching local_id
@@ -603,6 +668,7 @@ mod yield_multiplier_weftv2_cluster {
             true
         }
 
+        /// Calculates the liquidity (total collateral value - total loan value) of a CDP.
         fn __get_cdp_liquidity(&self, local_id: NonFungibleLocalId) -> Decimal {
             let weft_market: Global<AnyComponent> = self.weft_market_address.into();
 
