@@ -96,7 +96,7 @@ mod yield_multiplier_root_cluster {
         fee_forgiveness_threshold: Decimal,
         fee_vault: FungibleVault,
         // Integration
-        root_price_oracle_address: ComponentAddress,
+        root_price_feed_address: ComponentAddress,
         cdp_manager: NonFungibleResourceManager,
     }
 
@@ -195,7 +195,7 @@ mod yield_multiplier_root_cluster {
                 fee_points: FeePoints::new(),
                 fee_forgiveness_threshold: dec!(-0.8),
                 fee_vault: FungibleVault::new(XRD),
-                root_price_oracle_address,
+                root_price_feed_address: root_price_oracle_address,
                 cdp_manager: cdp_resource.into(),
             };
 
@@ -650,7 +650,7 @@ mod yield_multiplier_root_cluster {
             };
 
             // Fetch price data from Root
-            let price_oracle: Global<AnyComponent> = self.root_price_oracle_address.into();
+            let price_oracle: Global<AnyComponent> = self.root_price_feed_address.into();
             let supply_price = price_oracle
                 .call_raw::<Option<PriceInfo>>("get_price", scrypto_args!(self.supply))
                 .unwrap()
