@@ -3,7 +3,7 @@
 use crate::accounts::AccountData;
 use crate::fees::FeePoints;
 use crate::info::{AccountInfo, ClusterInfo};
-use crate::root::*;
+use crate::root::{CDPType, CollaterizedDebtPositionData, PriceInfo};
 use crate::services::{ClusterService, ClusterServiceManager};
 // Shared Modules
 use shared::services::{ServiceValue, SetLock};
@@ -43,27 +43,12 @@ pub struct ExecutionTerms {
     // State Returns
     AccountInfo,
     ClusterInfo,
-    // WeftV2 Integration
-    CDPData,
-    CDPHealthChecker,
-    LoanPositionData,
-    LoanConfig,
-    LoanResourceConfig,
-    CollateralPositionData,
-    CollateralConfig,
-    CollateralResourceConfig,
-    RegisteredResourceType,
-    NFTCollateralPositionData,
-    NFTLiquidationValue,
-    RegisteredNFTResourceType,
-    EfficiencyMode,
-    CollateralConfigVersion,
-    CollateralInfo,
-    NFTCollateralInfo,
-    LoanInfo
+    // Root Integration
+    CollaterizedDebtPositionData,
+    CDPType,
+    PriceInfo,
 )]
 mod yield_multiplier_root_cluster {
-
     //] --------------- Scrypto Setup -------------- */
     enable_method_auth! {
         roles {
@@ -111,7 +96,7 @@ mod yield_multiplier_root_cluster {
         fee_forgiveness_threshold: Decimal,
         fee_vault: FungibleVault,
         // Integration
-        weft_market_address: ComponentAddress,
+        root_price_oracle_address: ComponentAddress,
         cdp_manager: NonFungibleResourceManager,
     }
 
@@ -126,7 +111,7 @@ mod yield_multiplier_root_cluster {
         /// - `user_resource`: Resource address for the user badge required for user operations.
         /// - `supply`: Resource address for the supply asset of the cluster.
         /// - `debt`: Resource address for the debt asset of the cluster.
-        /// - `cdp_resource`:Resource address of the WeftV2 CDP NFT.
+        /// - `cdp_resource`:Resource address of the Root CDP NFT.
         ///
         /// # Returns
         /// A globally accessible `YieldMultiplierRootCluster` component instance.
@@ -142,7 +127,7 @@ mod yield_multiplier_root_cluster {
             supply: ResourceAddress,
             debt: ResourceAddress,
             // Integration
-            weft_market_address: ComponentAddress,
+            root_price_oracle_address: ComponentAddress,
             cdp_resource: ResourceAddress,
         ) -> Global<YieldMultiplierRootCluster> {
             // Reserve component address
@@ -180,8 +165,8 @@ mod yield_multiplier_root_cluster {
                     metadata_locker_updater => rule!(deny_all);
                 },
                 init {
-                    "name"            => "L3//Yield Multiplier - WeftV2", locked;
-                    "description"     => "Lattic3 cluster component for the Yield Multiplier strategy, built on top of the Weft V2 lending platform.", locked;
+                    "name"            => "L3//Yield Multiplier - Root", locked;
+                    "description"     => "Lattic3 cluster component for the Yield Multiplier strategy, built on top of Root Finance's lending market.", locked;
                     "supply"          => supply, locked;
                     "debt"            => debt, locked;
                     // "dapp_definition" => dapp_definition_address, updatable;
@@ -210,7 +195,7 @@ mod yield_multiplier_root_cluster {
                 fee_points: FeePoints::new(),
                 fee_forgiveness_threshold: dec!(-0.8),
                 fee_vault: FungibleVault::new(XRD),
-                weft_market_address,
+                root_price_oracle_address,
                 cdp_manager: cdp_resource.into(),
             };
 
@@ -358,7 +343,7 @@ mod yield_multiplier_root_cluster {
         ///
         /// # Parameters
         /// - `user_badge`: Proof of the user's badge from the platform.
-        /// - `cdp`: Weft CDP input.
+        /// - `cdp`: Root CDP input.
         ///
         /// # Panics
         /// - If the cluster is not linked.
@@ -446,7 +431,8 @@ mod yield_multiplier_root_cluster {
             (cdp_bucket, fee_payment)
         }
 
-        /// Returns general information about an account. Queried from Weft using their `get_cdp` method.
+        /// Returns general information about an account.
+        /// Additional processing has to be done by fetching the state of Root's lending market; has to be done off-chain.
         ///
         /// # Parameters
         /// - `local_id`: The local ID of the account to query.
@@ -460,19 +446,17 @@ mod yield_multiplier_root_cluster {
             let account = self.accounts.get(&local_id).expect("User has no open account");
 
             // Fetch and parse the CDP
-            let cdp_id = account.cdp_vault.non_fungible_local_id();
-            let weft_market: Global<AnyComponent> = self.weft_market_address.into();
+            let cdp_badge = account.cdp_vault.non_fungible::<CollaterizedDebtPositionData>();
+            let cdp_id = cdp_badge.local_id().clone();
+            let cdp_data = cdp_badge.data();
 
-            let cdp_health_map =
-                weft_market.call_raw::<IndexMap<NonFungibleLocalId, CDPHealthChecker>>("get_cdp", scrypto_args!(indexset![cdp_id.clone()]));
-            let cdp_health = cdp_health_map.get(&cdp_id.clone()).unwrap();
-
-            let supply = match cdp_health.collateral_positions.get(&self.supply) {
-                Some(collateral) => collateral.amount,
+            let supply_units = match cdp_data.collaterals.get(&self.supply) {
+                Some(collateral) => collateral.checked_truncate(RoundingMode::ToZero).unwrap(),
                 None => dec!(0),
             };
-            let debt = match cdp_health.loan_positions.get(&self.debt) {
-                Some(loan) => loan.amount,
+
+            let debt_units = match cdp_data.loans.get(&self.debt) {
+                Some(loan) => loan.checked_truncate(RoundingMode::ToZero).unwrap(),
                 None => dec!(0),
             };
 
@@ -480,15 +464,7 @@ mod yield_multiplier_root_cluster {
             let platform_fee_due = self.__platform_fee_due(local_id.clone());
 
             // Construct and emit the account info
-            let info = AccountInfo {
-                cdp_id,
-                supply,
-                supply_value: cdp_health.total_collateral_value,
-                debt,
-                debt_value: cdp_health.total_loan_value,
-                health: cdp_health.liquidation_ltv,
-                platform_fee_due,
-            };
+            let info = AccountInfo { cdp_id, supply_units, debt_units, platform_fee_due };
 
             // Runtime::emit_event(EventAccountInfo { info: info.clone() });
             info
@@ -601,7 +577,7 @@ mod yield_multiplier_root_cluster {
             }
         }
 
-        //] ------------------- Weft ------------------- */
+        //] ------------------- Root ------------------- */
         /// Validates the given CDP by checking its contents.
         ///
         /// # Parameters
@@ -619,13 +595,14 @@ mod yield_multiplier_root_cluster {
         fn __validate_cdp(&self, local_id: NonFungibleLocalId) -> bool {
             // Parse CDP data or return false if fetching the data panics
             // Panic occurs if the cdp_manager cannot find an NFT with a matching local_id
-            let cdp: CDPData = match catch_unwind(|| self.cdp_manager.get_non_fungible_data::<CDPData>(&local_id)) {
-                Ok(cdp) => cdp,
-                Err(_) => {
-                    info!("Error parsing CDP with local_id {:?}", local_id);
-                    return false;
-                }
-            };
+            let cdp: CollaterizedDebtPositionData =
+                match catch_unwind(|| self.cdp_manager.get_non_fungible_data::<CollaterizedDebtPositionData>(&local_id)) {
+                    Ok(cdp) => cdp,
+                    Err(_) => {
+                        info!("Error parsing CDP with local_id {:?}", local_id);
+                        return false;
+                    }
+                };
 
             // Validate supply & debt amounts
             if cdp.collaterals.len() > 1 {
@@ -638,25 +615,6 @@ mod yield_multiplier_root_cluster {
                 return false;
             }
 
-            // Validate that there are no NFT collaterals
-            if cdp.nft_collaterals.len() != 0 {
-                info!("CDP with local_id {:?} has NFT collateral(s)", local_id);
-                return false;
-            }
-
-            //? Check for (unlikely) invalid CDP states
-            // if cdp.loans.len() == 1 && cdp.collaterals.len() == 0 {
-            //     info!("Invalid CDP state: 1 loan, 0 collateral");
-            //     return false;
-            // }
-
-            // Validate that all supply and debt assets are valid
-            // for (&resource, _) in cdp.collaterals.iter() {
-            //     if resource != self.supply {
-            //         info!("CDP with local_id {:?} has an invalid collateral asset", local_id);
-            //         return false;
-            //     }
-            // }
             if cdp.collaterals.len() == 1 {
                 if !cdp.collaterals.contains_key(&self.supply) {
                     info!("CDP with local_id {:?} has an invalid collateral asset", local_id);
@@ -664,12 +622,6 @@ mod yield_multiplier_root_cluster {
                 }
             }
 
-            // for (&resource, _) in cdp.loans.iter() {
-            //     if resource != self.debt {
-            //         info!("CDP with local_id {:?} has an invalid debt asset", local_id);
-            //         return false;
-            //     }
-            // }
             if cdp.loans.len() == 1 {
                 if !cdp.loans.contains_key(&self.debt) {
                     info!("CDP with local_id {:?} has an invalid debt asset", local_id);
@@ -681,14 +633,38 @@ mod yield_multiplier_root_cluster {
         }
 
         /// Calculates the liquidity (total collateral value - total loan value) of a CDP.
+        /// Since there is no way to get the actual amount of supply/debt (not units), units
+        /// are used for the liquidity calculation. This will not be accurate.
         fn __get_cdp_liquidity(&self, local_id: NonFungibleLocalId) -> Decimal {
-            let weft_market: Global<AnyComponent> = self.weft_market_address.into();
+            // Fetch the CDP data
+            let cdp_data = self.cdp_manager.get_non_fungible_data::<CollaterizedDebtPositionData>(&local_id);
 
-            let cdp_health_map: IndexMap<NonFungibleLocalId, CDPHealthChecker> =
-                weft_market.call_raw("get_cdp", scrypto_args!(indexset![local_id.clone()]));
-            let cdp_health = cdp_health_map.get(&local_id.clone()).unwrap();
+            let supply_units = match cdp_data.collaterals.get(&self.supply) {
+                Some(collateral) => collateral.checked_truncate(RoundingMode::ToZero).unwrap(),
+                None => dec!(0),
+            };
 
-            cdp_health.total_collateral_value.checked_sub(cdp_health.total_loan_value).unwrap()
+            let debt_units = match cdp_data.loans.get(&self.debt) {
+                Some(loan) => loan.checked_truncate(RoundingMode::ToZero).unwrap(),
+                None => dec!(0),
+            };
+
+            // Fetch price data from Root
+            let price_oracle: Global<AnyComponent> = self.root_price_oracle_address.into();
+            let supply_price = price_oracle
+                .call_raw::<Option<PriceInfo>>("get_price", scrypto_args!(self.supply))
+                .unwrap()
+                .price;
+            let debt_price = price_oracle
+                .call_raw::<Option<PriceInfo>>("get_price", scrypto_args!(self.debt))
+                .unwrap()
+                .price;
+
+            supply_units
+                .checked_mul(supply_price)
+                .unwrap()
+                .checked_sub(debt_units.checked_mul(debt_price).unwrap())
+                .unwrap()
         }
     }
 }

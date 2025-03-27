@@ -17,10 +17,7 @@ pub struct ClusterInfo {
 #[derive(ScryptoSbor, Debug, Clone)]
 pub struct AccountInfo {
     pub cdp_id: NonFungibleLocalId,
-    pub supply: Decimal,
-    pub supply_value: Decimal,
-    pub debt: Decimal,
-    pub debt_value: Decimal,
-    pub health: Decimal,
+    pub supply_units: Decimal,
+    pub debt_units: Decimal,
     pub platform_fee_due: Decimal,
 }
