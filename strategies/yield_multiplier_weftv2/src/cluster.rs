@@ -651,15 +651,27 @@ mod yield_multiplier_weftv2_cluster {
             // }
 
             // Validate that all supply and debt assets are valid
-            for (&resource, _) in cdp.collaterals.iter() {
-                if resource != self.supply {
+            // for (&resource, _) in cdp.collaterals.iter() {
+            //     if resource != self.supply {
+            //         info!("CDP with local_id {:?} has an invalid collateral asset", local_id);
+            //         return false;
+            //     }
+            // }
+            if cdp.collaterals.len() == 1 {
+                if !cdp.collaterals.contains_key(&self.supply) {
                     info!("CDP with local_id {:?} has an invalid collateral asset", local_id);
                     return false;
                 }
             }
 
-            for (&resource, _) in cdp.loans.iter() {
-                if resource != self.debt {
+            // for (&resource, _) in cdp.loans.iter() {
+            //     if resource != self.debt {
+            //         info!("CDP with local_id {:?} has an invalid debt asset", local_id);
+            //         return false;
+            //     }
+            // }
+            if cdp.loans.len() == 1 {
+                if !cdp.loans.contains_key(&self.debt) {
                     info!("CDP with local_id {:?} has an invalid debt asset", local_id);
                     return false;
                 }
