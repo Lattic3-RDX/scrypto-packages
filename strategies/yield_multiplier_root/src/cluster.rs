@@ -651,14 +651,24 @@ mod yield_multiplier_root_cluster {
 
             // Fetch price data from Root
             let price_oracle: Global<AnyComponent> = self.root_price_feed_address.into();
-            let supply_price = price_oracle
-                .call_raw::<Option<PriceInfo>>("get_price", scrypto_args!(self.supply))
-                .unwrap()
-                .price;
-            let debt_price = price_oracle
-                .call_raw::<Option<PriceInfo>>("get_price", scrypto_args!(self.debt))
-                .unwrap()
-                .price;
+            let supply_price = match price_oracle.call_raw::<Option<PriceInfo>>("get_price", scrypto_args!(self.supply)) {
+                Some(price) => price.price,
+                None => {
+                    if self.supply == XRD {
+                        return dec!(1);
+                    }
+                    panic!("Unable to fetch price for supply asset {:?}", self.supply);
+                }
+            };
+            let debt_price = match price_oracle.call_raw::<Option<PriceInfo>>("get_price", scrypto_args!(self.debt)) {
+                Some(price) => price.price,
+                None => {
+                    if self.debt == XRD {
+                        return dec!(1);
+                    }
+                    panic!("Unable to fetch price for debt asset {:?}", self.debt);
+                }
+            };
 
             supply_units
                 .checked_mul(supply_price)
