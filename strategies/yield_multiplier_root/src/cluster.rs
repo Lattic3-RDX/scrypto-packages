@@ -559,11 +559,29 @@ mod yield_multiplier_root_cluster {
             let liquidity = self.__get_cdp_liquidity(cdp_id);
 
             let time_delta = (now() - account.updated_at) / SECONDS_PER_YEAR;
-            let liquidity_delta = liquidity.checked_sub(account.initial_liquidity).unwrap();
-            let liquidity_percentage_change = liquidity_delta.checked_div(account.initial_liquidity).unwrap();
+            let liquidity_delta = liquidity.checked_sub(account.initial_liquidity).unwrap_or({
+                info!(
+                    "Failed to calculate liquidity delta: liquidity={:?}, initial_liquidity={:?}",
+                    liquidity, account.initial_liquidity
+                );
+                dec!(0)
+            });
+            let liquidity_percentage_change = if liquidity_delta == dec!(0) {
+                pdec!(0)
+            } else {
+                PreciseDecimal::from(liquidity_delta)
+                    .checked_div(PreciseDecimal::from(account.initial_liquidity))
+                    .unwrap_or({
+                        info!(
+                            "Failed to calculate liquidity percentage change: liquidity_delta={:?}, initial_liquidity={:?}",
+                            liquidity_delta, account.initial_liquidity
+                        );
+                        pdec!(0)
+                    })
+            };
 
             // If liquidity dropped by fee_forgiveness%, fee is 0
-            if liquidity_percentage_change <= self.fee_forgiveness_threshold {
+            if liquidity_percentage_change <= self.fee_forgiveness_threshold.into() {
                 dec!(0)
             } else {
                 // Using .checked_abs() to collect fee on profits/losses
