@@ -42,7 +42,7 @@ impl YMWeftV2ClusterFactory {
                 "YieldMultiplierWeftV2Cluster", "instantiate",
                 manifest_args!(
                     owner_rule, admin_rule,
-                    platform, link_badge, user_badge,
+                    platform,
                     supply, debt,
                     platform, cdp
                 ),

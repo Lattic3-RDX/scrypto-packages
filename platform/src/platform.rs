@@ -54,6 +54,7 @@ mod platform {
             update_cluster_service_and_set_lock => restrict_to: [can_lock_services];
             // Platform
             get_user_badge_address => PUBLIC;
+            get_link_badge_address => PUBLIC;
             new_admin_badge        => restrict_to: [OWNER];
             update_service              => restrict_to: [can_update_services, can_lock_services];
             update_service_and_set_lock => restrict_to: [can_lock_services];
@@ -412,6 +413,11 @@ mod platform {
         /// Returns the ResourceAddress of the user badge.
         pub fn get_user_badge_address(&self) -> ResourceAddress {
             self.user_badge_manager.address()
+        }
+
+        /// Returns the ResourceAddress of the link badge.
+        pub fn get_link_badge_address(&self) -> ResourceAddress {
+            self.link_badge_manager.address()
         }
 
         /// Mint a new admin badge.

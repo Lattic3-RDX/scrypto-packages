@@ -121,8 +121,6 @@ mod yield_multiplier_root_cluster {
             admin_rule: AccessRule,
             // Link
             platform_address: ComponentAddress,
-            link_resource: ResourceAddress,
-            user_resource: ResourceAddress,
             // Cluster
             supply: ResourceAddress,
             debt: ResourceAddress,
@@ -132,6 +130,10 @@ mod yield_multiplier_root_cluster {
         ) -> Global<YieldMultiplierRootCluster> {
             // Reserve component address
             let (address_reservation, component_address) = Runtime::allocate_component_address(YieldMultiplierRootCluster::blueprint_id());
+
+            let platform: Global<AnyComponent> = platform_address.into();
+            let link_resource = platform.call_raw::<ResourceAddress>("get_link_badge_address", scrypto_args!());
+            let user_resource = platform.call_raw::<ResourceAddress>("get_user_badge_address", scrypto_args!());
 
             //] Authorisation
             // Component
