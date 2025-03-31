@@ -93,7 +93,7 @@ mod platform {
             let owner_badge: FungibleBucket = ResourceBuilder::new_fungible(OwnerRole::None)
                 .divisibility(DIVISIBILITY_NONE)
                 .metadata(metadata! {init {
-                    "name"        => "Lattic3 Owner Badge", locked;
+                    "name"        => "Lattic3 Owner", locked;
                     "description" => "Badge representing the owner of the Lattic3 lending platform", locked;
                 }})
                 .mint_initial_supply(1);
@@ -127,7 +127,7 @@ mod platform {
             // Admin badge
             let admin_badge_manager: NonFungibleResourceManager = ResourceBuilder::new_integer_non_fungible::<()>(owner_role.clone())
                 .metadata(metadata! {init {
-                    "name"            => "L3//Admin Badge", locked;
+                    "name"            => "L3//Admin", locked;
                     "description"     => "Badge used to denote an admin's ownership over accounts in Lattic3 clusters.", locked;
                     "dapp_definition" => dapp_definition_address, updatable;
                 }})
@@ -153,7 +153,7 @@ mod platform {
             // User badge
             let user_badge_manager: NonFungibleResourceManager = ResourceBuilder::new_integer_non_fungible::<User>(owner_role.clone())
                 .metadata(metadata! {init {
-                    "name"            => "L3//User Badge", locked;
+                    "name"            => "L3//User", locked;
                     "description"     => "Badge used to denote a user's ownership over accounts in Lattic3 clusters.", locked;
                     "dapp_definition" => dapp_definition_address, updatable;
                 }})
