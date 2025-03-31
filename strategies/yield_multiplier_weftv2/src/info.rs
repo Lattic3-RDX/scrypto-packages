@@ -22,5 +22,12 @@ pub struct AccountInfo {
     pub debt: Decimal,
     pub debt_value: Decimal,
     pub health: Decimal,
-    // pub platform_fee_due: Decimal,
+    pub fee_info: FeeInfo,
+}
+
+#[derive(ScryptoSbor, Debug, Clone)]
+pub struct FeeInfo {
+    pub open: Decimal,
+    pub close: Decimal,
+    pub execute: Decimal,
 }

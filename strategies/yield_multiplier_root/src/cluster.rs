@@ -1,13 +1,12 @@
 /* ------------------ Imports ----------------- */
 // Modules
 use crate::accounts::AccountData;
-use crate::fees::FeePoints;
-use crate::info::{AccountInfo, ClusterInfo};
+use crate::fees::FeeStructure;
+use crate::info::{AccountInfo, ClusterInfo, FeeInfo};
 use crate::root::{CDPType, CollaterizedDebtPositionData, PriceInfo};
 use crate::services::{ClusterService, ClusterServiceManager};
 // Shared Modules
 use shared::services::{ServiceValue, SetLock};
-use shared::utils::{now, SECONDS_PER_YEAR};
 // Libraries
 use scrypto::prelude::*;
 use std::panic::catch_unwind;
@@ -33,7 +32,7 @@ pub struct ExecutionTerms {
     Decimal,
     u64,
     i64,
-    FeePoints,
+    FeeStructure,
     ExecutionTerms,
     // Services
     ClusterServiceManager,
@@ -43,6 +42,7 @@ pub struct ExecutionTerms {
     // State Returns
     AccountInfo,
     ClusterInfo,
+    FeeInfo,
     // Root Integration
     CollaterizedDebtPositionData,
     CDPType,
@@ -63,9 +63,8 @@ mod yield_multiplier_root_cluster {
             get_cluster_info => PUBLIC;
             update_service              => restrict_to: [can_manage_services, can_lock_services];
             update_service_and_set_lock => restrict_to: [can_lock_services];
-            set_fee_points                => restrict_to: [can_manage_fees];
-            set_fee_forgiveness_threshold => restrict_to: [can_manage_fees];
-            collect_fees                  => restrict_to: [can_manage_fees];
+            set_fee_structure           => restrict_to: [can_manage_fees];
+            collect_fees                => restrict_to: [can_manage_fees];
             // Accounts
             open_account     => PUBLIC;
             close_account    => PUBLIC;
@@ -92,8 +91,7 @@ mod yield_multiplier_root_cluster {
         accounts: KeyValueStore<NonFungibleLocalId, AccountData>,
         account_count: u64,
         // Fees
-        fee_points: FeePoints,
-        fee_forgiveness_threshold: Decimal,
+        fee_structure: FeeStructure,
         fee_vault: FungibleVault,
         // Integration
         root_price_feed_address: ComponentAddress,
@@ -194,8 +192,7 @@ mod yield_multiplier_root_cluster {
                 account_count: 0,
                 execution_term_manager,
                 services: ClusterServiceManager::new(),
-                fee_points: FeePoints::new(),
-                fee_forgiveness_threshold: dec!(-0.8),
+                fee_structure: FeeStructure::default(),
                 fee_vault: FungibleVault::new(XRD),
                 root_price_feed_address,
                 cdp_manager: cdp_resource.into(),
@@ -265,9 +262,6 @@ mod yield_multiplier_root_cluster {
         //] ------------------ Cluster ----------------- */
         /// Returns general information about the cluster.
         ///
-        /// # Emits
-        /// - `EventClusterInfo`: contains the same information as the returned `ClusterInfo` struct.
-        ///
         /// # Returns
         /// A `ClusterInfo` struct containing the following information:
         /// - `platform_address`: The component address of the platform to which this cluster links.
@@ -287,7 +281,6 @@ mod yield_multiplier_root_cluster {
                 execution_term_manager: self.execution_term_manager,
             };
 
-            // Runtime::emit_event(EventClusterInfo { info: info.clone() });
             info
         }
 
@@ -315,21 +308,15 @@ mod yield_multiplier_root_cluster {
         }
 
         //] Fees
-        /// Sets new fee points for the cluster.
+        /// Sets a new fee structure for the cluster.
+        /// All fees are set in XRD.
         ///
         /// # Parameters
-        /// - `p0`, `p1`, `p2`: The new fee points. If `None`, the previous value is used.
-        ///
-        /// # Notes
-        /// Breakpoints must be in order (i.e. p0.x < p1.x < p2.x).
-        pub fn set_fee_points(&mut self, p0: Option<(Decimal, Decimal)>, p1: Option<(Decimal, Decimal)>, p2: Option<(Decimal, Decimal)>) {
-            self.fee_points.set_fee_points(p0, p1, p2);
-        }
-
-        /// Sets the fee forgiveness threshold for the cluster.
-        /// If the liquidity change is within this percentage of the initial liquidity, the fee is set to 0.
-        pub fn set_fee_forgiveness_threshold(&mut self, threshold: Decimal) {
-            self.fee_forgiveness_threshold = threshold;
+        /// - `open`: Fees for opening an account.
+        /// - `close`: Fees for closing an account.
+        /// - `execute`: Fees for executing a transaction.
+        pub fn set_fee_structure(&mut self, open: Option<Decimal>, close: Option<Decimal>, execute: Option<Decimal>) {
+            self.fee_structure.set(open, close, execute);
         }
 
         /// Collects fees from the fee vault.
@@ -345,14 +332,14 @@ mod yield_multiplier_root_cluster {
         ///
         /// # Parameters
         /// - `user_badge`: Proof of the user's badge from the platform.
-        /// - `cdp`: Root CDP input.
+        /// - `cdp`: Weft CDP input.
         ///
         /// # Panics
         /// - If the cluster is not linked.
         /// - If the ClusterService::OpenAccount is disabled.
         /// - If the user already has an account.
         /// - If the CDP is invalid.
-        pub fn open_account(&mut self, user_badge: NonFungibleProof, cdp: NonFungibleBucket) {
+        pub fn open_account(&mut self, user_badge: NonFungibleProof, cdp: NonFungibleBucket, mut fee_payment: FungibleBucket) {
             // Check operating service
             assert!(self.services.get(ClusterService::OpenAccount), "ClusterService::OpenAccount disabled");
 
@@ -360,30 +347,29 @@ mod yield_multiplier_root_cluster {
             assert_eq!(self.link.amount(), dec!(1), "Cluster does not have a link badge");
 
             // Validate the CDP
-            // assert_eq!(cdp.amount(), dec!(1), "Invalid CDP amount; must contain 1 NFT");
-            // assert_eq!(cdp.resource_address(), self.cdp_manager.address(), "Invalid CDP resource address");
+            assert_eq!(cdp.amount(), dec!(1), "Invalid CDP amount; must contain 1 NFT");
+            assert_eq!(cdp.resource_address(), self.cdp_manager.address(), "Invalid CDP resource address");
 
             let cdp_id = cdp.non_fungible_local_id();
             let cdp_valid = self.__validate_cdp(cdp_id.clone());
             assert!(cdp_valid, "Invalid CDP");
+
+            // Take fee payment
+            let fee = self.fee_structure.open;
+            self.fee_vault.put(fee_payment.take(fee));
 
             // Update the user's badge
             let valid_user = self.__validate_user(user_badge);
             let user_id = valid_user.non_fungible_local_id();
             self.__with_link(|platform, link_badge| platform.call_raw("open_account", scrypto_args!(link_badge, user_id.clone())));
 
-            // Add the CDP to the cluster
-            let liquidity = self.__get_cdp_liquidity(cdp_id.clone());
-
             if self.accounts.get(&user_id).is_some() {
                 let mut account = self.accounts.get_mut(&user_id).unwrap();
                 assert!(account.cdp_vault.amount() == dec!(0), "User already has an account");
 
                 account.cdp_vault.put(cdp);
-                account.updated_at = now();
-                account.initial_liquidity = liquidity;
             } else {
-                let account = AccountData::new(NonFungibleVault::with_bucket(cdp), liquidity);
+                let account = AccountData::new(NonFungibleVault::with_bucket(cdp));
                 self.accounts.insert(user_id, account);
             }
 
@@ -412,15 +398,15 @@ mod yield_multiplier_root_cluster {
             assert!(self.account_count > 0, "No accounts to close");
 
             // Validate own link badge
-            // assert_eq!(self.link.amount(), dec!(1), "Cluster does not have a link badge");
+            assert_eq!(self.link.amount(), dec!(1), "Cluster does not have a link badge");
 
             // Validate the user
             let valid_user = self.__validate_user(user_badge);
             let user_id = valid_user.non_fungible_local_id();
 
             // Validate the fee
-            let fee_amount = self.__platform_fee_due(user_id.clone());
-            self.fee_vault.put(fee_payment.take(fee_amount));
+            let fee = self.fee_structure.close;
+            self.fee_vault.put(fee_payment.take(fee));
 
             // Extract the CDP and remove it from the cluster
             let cdp_bucket = self.accounts.get_mut(&user_id).expect("User has no open account").cdp_vault.take_all();
@@ -428,8 +414,8 @@ mod yield_multiplier_root_cluster {
             // Update the user's badge
             self.__with_link(|platform, link_badge| platform.call_raw("close_account", scrypto_args!(link_badge, user_id)));
 
+            // Remove the account
             self.account_count -= 1;
-
             (cdp_bucket, fee_payment)
         }
 
@@ -462,13 +448,16 @@ mod yield_multiplier_root_cluster {
                 None => dec!(0),
             };
 
-            // Calculate the close fee amount
-            let platform_fee_due = self.__platform_fee_due(local_id.clone());
+            // Return the fee amounts
+            let fee_info = FeeInfo {
+                open: self.fee_structure.open,
+                close: self.fee_structure.close,
+                execute: self.fee_structure.execute,
+            };
 
             // Construct and emit the account info
-            let info = AccountInfo { cdp_id, supply_units, debt_units, platform_fee_due };
+            let info = AccountInfo { cdp_id, supply_units, debt_units, fee_info };
 
-            // Runtime::emit_event(EventAccountInfo { info: info.clone() });
             info
         }
 
@@ -497,7 +486,9 @@ mod yield_multiplier_root_cluster {
 
             // Return CDP and execution terms
             let cdp_bucket = self.accounts.get_mut(&user_id).expect("User has no open account").cdp_vault.take_all();
-            let execution_terms = self.execution_term_manager.mint_ruid_non_fungible(ExecutionTerms { user_id });
+
+            let terms = ExecutionTerms { user_id };
+            let execution_terms = self.execution_term_manager.mint_ruid_non_fungible(terms);
 
             (cdp_bucket, execution_terms)
         }
@@ -512,25 +503,36 @@ mod yield_multiplier_root_cluster {
         /// # Panics
         /// - If the user does not have an open account.
         /// - If the CDP is invalid (wrong type, insufficient amount).
-        pub fn end_execution(&mut self, cdp_bucket: NonFungibleBucket, terms_bucket: NonFungibleBucket) {
+        pub fn end_execution(
+            &mut self,
+            cdp_bucket: NonFungibleBucket,
+            terms_bucket: NonFungibleBucket,
+            mut fee_payment: FungibleBucket,
+        ) -> FungibleBucket {
             // Validate the execution terms
             assert!(self.execution_term_manager.address() == terms_bucket.resource_address());
-            let user_id = terms_bucket.non_fungible::<ExecutionTerms>().data().user_id;
+            let terms = terms_bucket.non_fungible::<ExecutionTerms>().data();
 
             // Validate the CDP
             let cdp_id = cdp_bucket.non_fungible_local_id();
             let cdp_valid = self.__validate_cdp(cdp_id.clone());
             assert!(cdp_valid, "Invalid CDP");
 
+            // Calculate the fee
+            let fee = self.fee_structure.execute;
+            self.fee_vault.put(fee_payment.take(fee));
+
             // Return the CDP
             self.accounts
-                .get_mut(&user_id)
+                .get_mut(&terms.user_id)
                 .expect("User has no open account")
                 .cdp_vault
                 .put(cdp_bucket);
 
             // Burn the execution terms
             self.execution_term_manager.burn(terms_bucket);
+
+            fee_payment
         }
 
         //] Private
@@ -542,59 +544,6 @@ mod yield_multiplier_root_cluster {
             assert_eq!(valid_user.amount(), dec!(1), "Invalid user badge quantity");
 
             valid_user
-        }
-
-        /// Calculates the fee due for the user's account.
-        ///
-        /// The fee is calculated based on the difference in liquidity between the current CDP's liquidity
-        /// and the initial liquidity using the specified `fee_points`.
-        ///
-        /// If the liquidity of the user's CDP has dropped by `fee_forgiveness_threshold`% or more, the fee is 0.
-        ///
-        /// Returns the calculated fee as a decimal value.
-        fn __platform_fee_due(&self, user_id: NonFungibleLocalId) -> Decimal {
-            let account = self.accounts.get(&user_id).expect("User has no open account");
-
-            let cdp_id = account.cdp_vault.non_fungible_local_id();
-            let liquidity = self.__get_cdp_liquidity(cdp_id);
-
-            let time_delta = (now() - account.updated_at) / SECONDS_PER_YEAR;
-            let liquidity_delta = liquidity.checked_sub(account.initial_liquidity).unwrap_or({
-                info!(
-                    "Failed to calculate liquidity delta: liquidity={:?}, initial_liquidity={:?}",
-                    liquidity, account.initial_liquidity
-                );
-                dec!(0)
-            });
-            let liquidity_percentage_change = if liquidity_delta == dec!(0) {
-                pdec!(0)
-            } else {
-                PreciseDecimal::from(liquidity_delta)
-                    .checked_div(PreciseDecimal::from(account.initial_liquidity))
-                    .unwrap_or({
-                        info!(
-                            "Failed to calculate liquidity percentage change: liquidity_delta={:?}, initial_liquidity={:?}",
-                            liquidity_delta, account.initial_liquidity
-                        );
-                        pdec!(0)
-                    })
-            };
-
-            // If liquidity dropped by fee_forgiveness%, fee is 0
-            if liquidity_percentage_change <= self.fee_forgiveness_threshold.into() {
-                dec!(0)
-            } else {
-                // Using .checked_abs() to collect fee on profits/losses
-                let fee_rate = self.fee_points.get_fee_rate(liquidity_delta.checked_abs().unwrap());
-
-                liquidity
-                    .checked_abs()
-                    .unwrap()
-                    .checked_mul(time_delta)
-                    .unwrap()
-                    .checked_mul(fee_rate)
-                    .unwrap()
-            }
         }
 
         //] ------------------- Root ------------------- */
@@ -650,51 +599,6 @@ mod yield_multiplier_root_cluster {
             }
 
             true
-        }
-
-        /// Calculates the liquidity (total collateral value - total loan value) of a CDP.
-        /// Since there is no way to get the actual amount of supply/debt (not units), units
-        /// are used for the liquidity calculation. This will not be accurate.
-        fn __get_cdp_liquidity(&self, local_id: NonFungibleLocalId) -> Decimal {
-            // Fetch the CDP data
-            let cdp_data = self.cdp_manager.get_non_fungible_data::<CollaterizedDebtPositionData>(&local_id);
-
-            let supply_units = match cdp_data.collaterals.get(&self.supply) {
-                Some(collateral) => collateral.checked_truncate(RoundingMode::ToZero).unwrap(),
-                None => dec!(0),
-            };
-
-            let debt_units = match cdp_data.loans.get(&self.debt) {
-                Some(loan) => loan.checked_truncate(RoundingMode::ToZero).unwrap(),
-                None => dec!(0),
-            };
-
-            // Fetch price data from Root
-            let price_oracle: Global<AnyComponent> = self.root_price_feed_address.into();
-            let supply_price = match price_oracle.call_raw::<Option<PriceInfo>>("get_price", scrypto_args!(self.supply)) {
-                Some(price) => price.price,
-                None => {
-                    if self.supply == XRD {
-                        return dec!(1);
-                    }
-                    panic!("Unable to fetch price for supply asset {:?}", self.supply);
-                }
-            };
-            let debt_price = match price_oracle.call_raw::<Option<PriceInfo>>("get_price", scrypto_args!(self.debt)) {
-                Some(price) => price.price,
-                None => {
-                    if self.debt == XRD {
-                        return dec!(1);
-                    }
-                    panic!("Unable to fetch price for debt asset {:?}", self.debt);
-                }
-            };
-
-            supply_units
-                .checked_mul(supply_price)
-                .unwrap()
-                .checked_sub(debt_units.checked_mul(debt_price).unwrap())
-                .unwrap()
         }
     }
 }

@@ -19,5 +19,12 @@ pub struct AccountInfo {
     pub cdp_id: NonFungibleLocalId,
     pub supply_units: Decimal,
     pub debt_units: Decimal,
-    pub platform_fee_due: Decimal,
+    pub fee_info: FeeInfo,
+}
+
+#[derive(ScryptoSbor, Debug, Clone)]
+pub struct FeeInfo {
+    pub open: Decimal,
+    pub close: Decimal,
+    pub execute: Decimal,
 }
