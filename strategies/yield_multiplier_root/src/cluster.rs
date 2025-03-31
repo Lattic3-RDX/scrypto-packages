@@ -271,6 +271,13 @@ mod yield_multiplier_root_cluster {
         /// - `supply_res`: The resource address of the supply asset.
         /// - `debt_res`: The resource address of the debt asset.
         pub fn get_cluster_info(&self) -> ClusterInfo {
+            // Return the fee amounts
+            let fee_info = FeeInfo {
+                open: self.fee_structure.open,
+                close: self.fee_structure.close,
+                execute: self.fee_structure.execute,
+            };
+
             let info = ClusterInfo {
                 platform_address: self.platform_address,
                 cluster_address: self.component_address,
@@ -279,6 +286,7 @@ mod yield_multiplier_root_cluster {
                 debt_res: self.debt,
                 account_count: self.account_count,
                 execution_term_manager: self.execution_term_manager,
+                fee_info,
             };
 
             info
@@ -445,15 +453,8 @@ mod yield_multiplier_root_cluster {
                 None => dec!(0),
             };
 
-            // Return the fee amounts
-            let fee_info = FeeInfo {
-                open: self.fee_structure.open,
-                close: self.fee_structure.close,
-                execute: self.fee_structure.execute,
-            };
-
             // Construct and emit the account info
-            let info = AccountInfo { cdp_id, supply_units, debt_units, fee_info };
+            let info = AccountInfo { cdp_id, supply_units, debt_units };
 
             info
         }

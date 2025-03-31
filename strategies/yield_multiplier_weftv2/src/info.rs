@@ -11,6 +11,14 @@ pub struct ClusterInfo {
     pub debt_res: ResourceAddress,
     pub account_count: u64,
     pub execution_term_manager: NonFungibleResourceManager,
+    pub fee_info: FeeInfo,
+}
+
+#[derive(ScryptoSbor, Debug, Clone)]
+pub struct FeeInfo {
+    pub open: Decimal,
+    pub close: Decimal,
+    pub execute: Decimal,
 }
 
 /* ------------------ Account ----------------- */
@@ -22,12 +30,4 @@ pub struct AccountInfo {
     pub debt: Decimal,
     pub debt_value: Decimal,
     pub health: Decimal,
-    pub fee_info: FeeInfo,
-}
-
-#[derive(ScryptoSbor, Debug, Clone)]
-pub struct FeeInfo {
-    pub open: Decimal,
-    pub close: Decimal,
-    pub execute: Decimal,
 }

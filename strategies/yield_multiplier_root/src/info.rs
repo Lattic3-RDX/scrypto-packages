@@ -11,14 +11,6 @@ pub struct ClusterInfo {
     pub debt_res: ResourceAddress,
     pub account_count: u64,
     pub execution_term_manager: NonFungibleResourceManager,
-}
-
-/* ------------------ Account ----------------- */
-#[derive(ScryptoSbor, Debug, Clone)]
-pub struct AccountInfo {
-    pub cdp_id: NonFungibleLocalId,
-    pub supply_units: Decimal,
-    pub debt_units: Decimal,
     pub fee_info: FeeInfo,
 }
 
@@ -27,4 +19,12 @@ pub struct FeeInfo {
     pub open: Decimal,
     pub close: Decimal,
     pub execute: Decimal,
+}
+
+/* ------------------ Account ----------------- */
+#[derive(ScryptoSbor, Debug, Clone)]
+pub struct AccountInfo {
+    pub cdp_id: NonFungibleLocalId,
+    pub supply_units: Decimal,
+    pub debt_units: Decimal,
 }
