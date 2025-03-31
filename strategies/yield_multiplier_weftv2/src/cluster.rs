@@ -7,7 +7,7 @@ use crate::services::{ClusterService, ClusterServiceManager};
 use crate::weft::*;
 // Shared Modules
 use shared::services::{ServiceValue, SetLock};
-use shared::utils::{now, SECONDS_PER_YEAR};
+// use shared::utils::{now, SECONDS_PER_YEAR};
 // Libraries
 use scrypto::prelude::*;
 use std::panic::catch_unwind;
@@ -65,6 +65,7 @@ pub struct ExecutionTerms {
     LoanInfo
 )]
 mod yield_multiplier_weftv2_cluster {
+    use crate::info;
 
     //] --------------- Scrypto Setup -------------- */
     enable_method_auth! {
@@ -389,27 +390,16 @@ mod yield_multiplier_weftv2_cluster {
             let user_id = valid_user.non_fungible_local_id();
             self.__with_link(|platform, link_badge| platform.call_raw("open_account", scrypto_args!(link_badge, user_id.clone())));
 
-            // Add the CDP to the cluster
-            let cdp_data = cdp.non_fungible::<CDPData>().data();
-            let supply = match cdp_data.collaterals.get(&self.supply) {
-                Some(collateral) => collateral.amount,
-                None => dec!(0),
-            };
-            let debt = match cdp_data.loans.get(&self.debt) {
-                Some(loan) => loan.units,
-                None => dec!(0),
-            };
-
             if self.accounts.get(&user_id).is_some() {
                 let mut account = self.accounts.get_mut(&user_id).unwrap();
                 assert!(account.cdp_vault.amount() == dec!(0), "User already has an account");
 
                 account.cdp_vault.put(cdp);
-                account.updated_at = now();
-                account.supply_delta = supply;
-                account.debt_delta = debt;
+                // account.updated_at = now();
+                // account.supply_delta = dec!(0);
+                // account.debt_delta = dec!(0);
             } else {
-                let account = AccountData::new(NonFungibleVault::with_bucket(cdp), supply, debt);
+                let account = AccountData::new(NonFungibleVault::with_bucket(cdp));
                 self.accounts.insert(user_id, account);
             }
 
@@ -432,7 +422,7 @@ mod yield_multiplier_weftv2_cluster {
         /// # Returns
         /// - A `NonFungibleBucket` containing the CDP.
         /// - A `FungibleBucket` containing the collected fees.
-        pub fn close_account(&mut self, user_badge: NonFungibleProof, mut fee_payment: FungibleBucket) -> (NonFungibleBucket, FungibleBucket) {
+        pub fn close_account(&mut self, user_badge: NonFungibleProof) -> NonFungibleBucket {
             // Check operating service
             assert!(self.services.get(ClusterService::CloseAccount), "ClusterService::CloseAccount disabled");
             assert!(self.account_count > 0, "No accounts to close");
@@ -445,8 +435,8 @@ mod yield_multiplier_weftv2_cluster {
             let user_id = valid_user.non_fungible_local_id();
 
             // Validate the fee
-            let fee_amount = self.__platform_fee_due(user_id.clone());
-            self.fee_vault.put(fee_payment.take(fee_amount));
+            // let fee_amount = self.__platform_fee_due(user_id.clone());
+            // self.fee_vault.put(fee_payment.take(fee_amount));
 
             // Extract the CDP and remove it from the cluster
             let cdp_bucket = self.accounts.get_mut(&user_id).expect("User has no open account").cdp_vault.take_all();
@@ -456,7 +446,7 @@ mod yield_multiplier_weftv2_cluster {
 
             self.account_count -= 1;
 
-            (cdp_bucket, fee_payment)
+            cdp_bucket
         }
 
         /// Returns general information about an account. Queried from Weft using their `get_cdp` method.
@@ -490,7 +480,7 @@ mod yield_multiplier_weftv2_cluster {
             };
 
             // Calculate the close fee amount
-            let platform_fee_due = self.__platform_fee_due(local_id.clone());
+            // let platform_fee_due = self.__platform_fee_due(local_id.clone());
 
             // Construct and emit the account info
             let info = AccountInfo {
@@ -500,7 +490,7 @@ mod yield_multiplier_weftv2_cluster {
                 debt,
                 debt_value: cdp_health.total_loan_value,
                 health: cdp_health.liquidation_ltv,
-                platform_fee_due,
+                // platform_fee_due,
             };
 
             // Runtime::emit_event(EventAccountInfo { info: info.clone() });
@@ -558,7 +548,12 @@ mod yield_multiplier_weftv2_cluster {
         /// # Panics
         /// - If the user does not have an open account.
         /// - If the CDP is invalid (wrong type, insufficient amount).
-        pub fn end_execution(&mut self, cdp_bucket: NonFungibleBucket, terms_bucket: NonFungibleBucket) {
+        pub fn end_execution(
+            &mut self,
+            cdp_bucket: NonFungibleBucket,
+            terms_bucket: NonFungibleBucket,
+            mut fee_payment: FungibleBucket,
+        ) -> FungibleBucket {
             // Validate the execution terms
             assert!(self.execution_term_manager.address() == terms_bucket.resource_address());
             let terms = terms_bucket.non_fungible::<ExecutionTerms>().data();
@@ -579,7 +574,8 @@ mod yield_multiplier_weftv2_cluster {
                 None => dec!(0),
             };
 
-            // Return the CDP
+            // Calculate the fee
+            let prices = self.__get_prices(indexset![self.supply, self.debt]);
             let mut account = self.accounts.get_mut(&terms.user_id).expect("User has no open account");
 
             let mut supply_delta = supply.checked_sub(terms.initial_supply).unwrap();
@@ -590,13 +586,44 @@ mod yield_multiplier_weftv2_cluster {
                 debt_delta = debt_delta.checked_neg().unwrap();
             }
 
-            account.supply_delta = account.supply_delta.checked_add(supply_delta).unwrap();
-            account.debt_delta = account.debt_delta.checked_add(debt_delta).unwrap();
+            let supply_value = prices
+                .get(&self.supply)
+                .unwrap_or({
+                    info!("No supply price found for {:?}, defaulting to 0", self.supply);
+                    &dec!(0)
+                })
+                .checked_mul(supply_delta)
+                .unwrap_or({
+                    info!("Unable to multiply price by {:?}, defaulting to 0", supply_delta);
+                    dec!(0)
+                });
+            info!("Value of supply {:?} ({:?}) is {:?}", self.supply, supply_value);
+            let debt_value = prices
+                .get(&self.debt)
+                .unwrap_or({
+                    info!("No debt price found for {:?}, defaulting to 0", self.debt);
+                    &dec!(0)
+                })
+                .checked_mul(debt_delta)
+                .unwrap_or({
+                    info!("Unable to multiply price by {:?}, defaulting to 0", debt_delta);
+                    dec!(0)
+                });
+            info!("Value of debt {:?} ({:?}) is {:?}", self.debt, debt_value);
+            let liquidity_delta = supply_value.checked_sub(debt_value).unwrap_or(dec!(0));
 
+            let fee_rate = self.fee_points.get_fee_rate(liquidity_delta.checked_abs().unwrap());
+            let fee = liquidity_delta.checked_abs().unwrap().checked_mul(fee_rate).unwrap();
+
+            self.fee_vault.put(fee_payment.take(fee));
+
+            // Return the CDP
             account.cdp_vault.put(cdp_bucket);
 
             // Burn the execution terms
             self.execution_term_manager.burn(terms_bucket);
+
+            fee_payment
         }
 
         //] Private
@@ -618,45 +645,45 @@ mod yield_multiplier_weftv2_cluster {
         /// If the liquidity of the user's CDP has dropped by `fee_forgiveness_threshold`% or more, the fee is 0.
         ///
         /// Returns the calculated fee as a decimal value.
-        fn __platform_fee_due(&self, user_id: NonFungibleLocalId) -> Decimal {
-            let account = self.accounts.get(&user_id).expect("User has no open account");
+        // fn __platform_fee_due(&self, user_id: NonFungibleLocalId) -> Decimal {
+        //     let account = self.accounts.get(&user_id).expect("User has no open account");
 
-            // let cdp_id = account.cdp_vault.non_fungible_local_id();
-            let time_delta = (now() - account.updated_at) / SECONDS_PER_YEAR;
-            info!(
-                "Time delta: {:?} ({:?} / {:?}",
-                time_delta,
-                (now() - account.updated_at),
-                SECONDS_PER_YEAR
-            );
+        //     // let cdp_id = account.cdp_vault.non_fungible_local_id();
+        //     let time_delta = (now() - account.updated_at) / SECONDS_PER_YEAR;
+        //     info!(
+        //         "Time delta: {:?} ({:?} / {:?}",
+        //         time_delta,
+        //         (now() - account.updated_at),
+        //         SECONDS_PER_YEAR
+        //     );
 
-            let prices = self.__get_prices(indexset![self.supply, self.debt]);
-            info!("Prices: {:?}", prices);
+        //     let prices = self.__get_prices(indexset![self.supply, self.debt]);
+        //     info!("Prices: {:?}", prices);
 
-            let supply_value = prices
-                .get(&self.supply)
-                .unwrap_or(&dec!(0))
-                .checked_mul(account.supply_delta)
-                .unwrap_or(dec!(0));
-            info!("Value of supply {:?} ({:?}) is {:?}", self.supply, account.supply_delta, supply_value);
-            let debt_value = prices
-                .get(&self.debt)
-                .unwrap_or(&dec!(0))
-                .checked_mul(account.debt_delta)
-                .unwrap_or(dec!(0));
-            info!("Value of debt {:?} ({:?}) is {:?}", self.debt, account.debt_delta, debt_value);
-            let liquidity_delta = supply_value.checked_sub(debt_value).unwrap_or(dec!(0));
+        //     let supply_value = prices
+        //         .get(&self.supply)
+        //         .unwrap_or(&dec!(0))
+        //         .checked_mul(account.supply_delta)
+        //         .unwrap_or(dec!(0));
+        //     info!("Value of supply {:?} ({:?}) is {:?}", self.supply, account.supply_delta, supply_value);
+        //     let debt_value = prices
+        //         .get(&self.debt)
+        //         .unwrap_or(&dec!(0))
+        //         .checked_mul(account.debt_delta)
+        //         .unwrap_or(dec!(0));
+        //     info!("Value of debt {:?} ({:?}) is {:?}", self.debt, account.debt_delta, debt_value);
+        //     let liquidity_delta = supply_value.checked_sub(debt_value).unwrap_or(dec!(0));
 
-            let fee_rate = self.fee_points.get_fee_rate(liquidity_delta.checked_abs().unwrap());
+        //     let fee_rate = self.fee_points.get_fee_rate(liquidity_delta.checked_abs().unwrap());
 
-            liquidity_delta
-                .checked_abs()
-                .unwrap()
-                .checked_mul(time_delta)
-                .unwrap()
-                .checked_mul(fee_rate)
-                .unwrap()
-        }
+        //     liquidity_delta
+        //         .checked_abs()
+        //         .unwrap()
+        //         .checked_mul(time_delta)
+        //         .unwrap()
+        //         .checked_mul(fee_rate)
+        //         .unwrap()
+        // }
 
         //] ------------------- Weft ------------------- */
         /// Validates the given CDP by checking its contents.
@@ -737,21 +764,10 @@ mod yield_multiplier_weftv2_cluster {
             true
         }
 
-        /// Calculates the liquidity (total collateral value - total loan value) of a CDP.
-        fn __get_cdp_liquidity(&self, local_id: NonFungibleLocalId) -> Decimal {
-            let weft_market: Global<AnyComponent> = self.weft_market_address.into();
-
-            let cdp_health_map: IndexMap<NonFungibleLocalId, CDPHealthChecker> =
-                weft_market.call_raw("get_cdp", scrypto_args!(indexset![local_id.clone()]));
-            let cdp_health = cdp_health_map.get(&local_id.clone()).unwrap();
-
-            cdp_health.total_collateral_value.checked_sub(cdp_health.total_loan_value).unwrap()
-        }
-
         fn __get_prices(&self, assets: IndexSet<ResourceAddress>) -> IndexMap<ResourceAddress, Decimal> {
             let weft_market: Global<AnyComponent> = self.weft_market_address.into();
 
-            weft_market.call_raw::<IndexMap<ResourceAddress, Decimal>>("get_prices", scrypto_args!(assets))
+            weft_market.call_raw::<IndexMap<ResourceAddress, Decimal>>("get_price", scrypto_args!(assets))
         }
     }
 }
