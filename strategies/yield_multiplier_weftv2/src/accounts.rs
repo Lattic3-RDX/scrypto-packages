@@ -8,16 +8,18 @@ pub struct AccountData {
     pub cdp_vault: NonFungibleVault,
     // pub fee_vault: FungibleVault,
     pub updated_at: i64,
-    pub initial_liquidity: Decimal,
+    pub supply_delta: Decimal,
+    pub debt_delta: Decimal,
 }
 
 impl AccountData {
-    pub fn new(cdp_vault: NonFungibleVault, initial_liquidity: Decimal) -> Self {
+    pub fn new(cdp_vault: NonFungibleVault, supply_delta: Decimal, debt_delta: Decimal) -> Self {
         Self {
             cdp_vault,
             // fee_vault,
             updated_at: now(),
-            initial_liquidity,
+            supply_delta,
+            debt_delta,
         }
     }
 }
