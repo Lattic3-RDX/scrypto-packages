@@ -418,7 +418,7 @@ mod yield_multiplier_weftv2_cluster {
         ///
         /// # Returns
         /// - A `NonFungibleBucket` containing the CDP.
-        /// - A `FungibleBucket` containing the collected fees.
+        /// - A `FungibleBucket` containing the remainder of the fee.
         pub fn close_account(&mut self, user_badge: NonFungibleProof, mut fee_payment: FungibleBucket) -> (NonFungibleBucket, FungibleBucket) {
             // Check operating service
             assert!(self.services.get(ClusterService::CloseAccount), "ClusterService::CloseAccount disabled");

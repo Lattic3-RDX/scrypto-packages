@@ -337,14 +337,17 @@ mod yield_multiplier_root_cluster {
         ///
         /// # Parameters
         /// - `user_badge`: Proof of the user's badge from the platform.
-        /// - `cdp`: Weft CDP input.
+        /// - `cdp`: Root CDP input.
         ///
         /// # Panics
         /// - If the cluster is not linked.
         /// - If the ClusterService::OpenAccount is disabled.
         /// - If the user already has an account.
         /// - If the CDP is invalid.
-        pub fn open_account(&mut self, user_badge: NonFungibleProof, cdp: NonFungibleBucket, mut fee_payment: FungibleBucket) {
+        ///
+        /// # Returns
+        /// A `FungibleBucket` containing the remainder of the fee.
+        pub fn open_account(&mut self, user_badge: NonFungibleProof, cdp: NonFungibleBucket, mut fee_payment: FungibleBucket) -> FungibleBucket {
             // Check operating service
             assert!(self.services.get(ClusterService::OpenAccount), "ClusterService::OpenAccount disabled");
 
@@ -380,6 +383,7 @@ mod yield_multiplier_root_cluster {
 
             // Update the account count
             self.account_count += 1;
+            fee_payment
         }
 
         /// Closes an account for a user on the cluster, and withdraws CDP.
@@ -396,7 +400,7 @@ mod yield_multiplier_root_cluster {
         ///
         /// # Returns
         /// - A `NonFungibleBucket` containing the CDP.
-        /// - A `FungibleBucket` containing the collected fees.
+        /// - A `FungibleBucket` containing the remainder of the fee.
         pub fn close_account(&mut self, user_badge: NonFungibleProof, mut fee_payment: FungibleBucket) -> (NonFungibleBucket, FungibleBucket) {
             // Check operating service
             assert!(self.services.get(ClusterService::CloseAccount), "ClusterService::CloseAccount disabled");
