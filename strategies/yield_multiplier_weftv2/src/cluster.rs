@@ -354,7 +354,10 @@ mod yield_multiplier_weftv2_cluster {
         /// - If the ClusterService::OpenAccount is disabled.
         /// - If the user already has an account.
         /// - If the CDP is invalid.
-        pub fn open_account(&mut self, user_badge: NonFungibleProof, cdp: NonFungibleBucket, mut fee_payment: FungibleBucket) {
+        ///
+        /// # Returns
+        /// A `FungibleBucket` containing the remainder of the fee.
+        pub fn open_account(&mut self, user_badge: NonFungibleProof, cdp: NonFungibleBucket, mut fee_payment: FungibleBucket) -> FungibleBucket {
             // Check operating service
             assert!(self.services.get(ClusterService::OpenAccount), "ClusterService::OpenAccount disabled");
 
@@ -390,6 +393,7 @@ mod yield_multiplier_weftv2_cluster {
 
             // Update the account count
             self.account_count += 1;
+            fee_payment
         }
 
         /// Closes an account for a user on the cluster, and withdraws CDP.
@@ -490,14 +494,14 @@ mod yield_multiplier_weftv2_cluster {
         /// # Parameters
         /// - `user_badge`: A `NonFungibleProof` of the user's badge.
         ///
-        /// # Returns
-        /// - A `NonFungibleBucket` containing the user's CDP.
-        /// - A `NonFungibleBucket` containing the execution terms transient badge.
-        ///
         /// # Panics
         /// - If the cluster is not linked to the platform.
         /// - If the ClusterService::Execute is disabled.
         /// - If the user does not have an open account.
+        ///
+        /// # Returns
+        /// - A `NonFungibleBucket` containing the user's CDP.
+        /// - A `NonFungibleBucket` containing the execution terms transient badge.
         pub fn start_execution(&mut self, user_badge: NonFungibleProof) -> (NonFungibleBucket, NonFungibleBucket) {
             // Check ClusterService::Execute enabled
             assert!(self.services.get(ClusterService::Execute), "ClusterService::Execute disabled");
@@ -524,6 +528,9 @@ mod yield_multiplier_weftv2_cluster {
         /// # Panics
         /// - If the user does not have an open account.
         /// - If the CDP is invalid (wrong type, insufficient amount).
+        ///
+        /// # Returns
+        /// - A `FungibleBucket` containing the remainder of the fee.
         pub fn end_execution(
             &mut self,
             cdp_bucket: NonFungibleBucket,

@@ -427,9 +427,6 @@ mod yield_multiplier_root_cluster {
         ///
         /// # Returns
         /// - A `AccountInfo` struct with the account's information.
-        ///
-        /// # Emits
-        /// - `EventAccountInfo`: contains the same information as the returned `AccountInfo` struct.
         pub fn get_account_info(&self, local_id: NonFungibleLocalId) -> AccountInfo {
             let account = self.accounts.get(&local_id).expect("User has no open account");
 
@@ -469,14 +466,14 @@ mod yield_multiplier_root_cluster {
         /// # Parameters
         /// - `user_badge`: A `NonFungibleProof` of the user's badge.
         ///
-        /// # Returns
-        /// - A `NonFungibleBucket` containing the user's CDP.
-        /// - A `NonFungibleBucket` containing the execution terms transient badge.
-        ///
         /// # Panics
         /// - If the cluster is not linked to the platform.
         /// - If the ClusterService::Execute is disabled.
         /// - If the user does not have an open account.
+        ///
+        /// # Returns
+        /// - A `NonFungibleBucket` containing the user's CDP.
+        /// - A `NonFungibleBucket` containing the execution terms transient badge.
         pub fn start_execution(&mut self, user_badge: NonFungibleProof) -> (NonFungibleBucket, NonFungibleBucket) {
             // Check ClusterService::Execute enabled
             assert!(self.services.get(ClusterService::Execute), "ClusterService::Execute disabled");
@@ -503,6 +500,9 @@ mod yield_multiplier_root_cluster {
         /// # Panics
         /// - If the user does not have an open account.
         /// - If the CDP is invalid (wrong type, insufficient amount).
+        ///
+        /// # Returns
+        /// - A `FungibleBucket` containing the remainder of the fee.
         pub fn end_execution(
             &mut self,
             cdp_bucket: NonFungibleBucket,
