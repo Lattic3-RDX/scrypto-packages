@@ -94,7 +94,6 @@ mod yield_multiplier_root_cluster {
         fee_structure: FeeStructure,
         fee_vault: FungibleVault,
         // Integration
-        root_price_feed_address: ComponentAddress,
         cdp_manager: NonFungibleResourceManager,
     }
 
@@ -123,7 +122,6 @@ mod yield_multiplier_root_cluster {
             supply: ResourceAddress,
             debt: ResourceAddress,
             // Integration
-            root_price_feed_address: ComponentAddress,
             cdp_resource: ResourceAddress,
         ) -> Global<YieldMultiplierRootCluster> {
             // Reserve component address
@@ -194,7 +192,6 @@ mod yield_multiplier_root_cluster {
                 services: ClusterServiceManager::new(),
                 fee_structure: FeeStructure::default(),
                 fee_vault: FungibleVault::new(XRD),
-                root_price_feed_address,
                 cdp_manager: cdp_resource.into(),
             };
 
