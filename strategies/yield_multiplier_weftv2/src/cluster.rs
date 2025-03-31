@@ -597,7 +597,7 @@ mod yield_multiplier_weftv2_cluster {
                     info!("Unable to multiply price by {:?}, defaulting to 0", supply_delta);
                     dec!(0)
                 });
-            info!("Value of supply {:?} ({:?}) is {:?}", self.supply, supply_value);
+            // info!("Value of supply {:?} is {:?}", self.supply, supply_value);
             let debt_value = prices
                 .get(&self.debt)
                 .unwrap_or({
@@ -609,7 +609,7 @@ mod yield_multiplier_weftv2_cluster {
                     info!("Unable to multiply price by {:?}, defaulting to 0", debt_delta);
                     dec!(0)
                 });
-            info!("Value of debt {:?} ({:?}) is {:?}", self.debt, debt_value);
+            // info!("Value of debt {:?} is {:?}", self.debt, debt_value);
             let liquidity_delta = supply_value.checked_sub(debt_value).unwrap_or(dec!(0));
 
             let fee_rate = self.fee_points.get_fee_rate(liquidity_delta.checked_abs().unwrap());
