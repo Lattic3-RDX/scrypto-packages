@@ -1,0 +1,184 @@
+# ------------------ Lattic3 ----------------- #
+CALL_METHOD
+    Address("${platform_address}")
+    "new_user"
+;
+
+TAKE_ALL_FROM_WORKTOP
+    Address("${user_badge_res}")
+    Bucket("user_badge")
+;
+
+# ------------------- User ------------------- #
+
+CALL_METHOD
+    Address("${user_address}")
+    "withdraw"
+    Address("${supply_res}")
+    Decimal("${supply_amount}")
+;
+
+# ------------------- Weft ------------------- #
+
+# Take flash loan for 0.4xUSDC
+CALL_METHOD
+    Address("component_rdx1czmr02yl4da709ceftnm9dnmag7rthu0tu78wmtsn5us9j02d9d0xn")
+    "take_flash_loan"
+    Map<Address, Decimal>(
+        Address("resource_rdx1t4upr78guuapv5ept7d7ptekk9mqhy605zgms33mcszen8l9fac8vf") => Decimal("11.011")
+    )
+;
+
+# Collect all xUSDC into a bucket
+TAKE_ALL_FROM_WORKTOP
+    Address("resource_rdx1t4upr78guuapv5ept7d7ptekk9mqhy605zgms33mcszen8l9fac8vf")
+    Bucket("raw_supply")
+;
+
+TAKE_FROM_WORKTOP
+    Address("")
+    Decimal("amount")
+    Bucket("bucket_name")
+;
+
+# Convert xUSDC into w2_xUSDC
+CALL_METHOD
+    Address("component_rdx1czmr02yl4da709ceftnm9dnmag7rthu0tu78wmtsn5us9j02d9d0xn")
+    "deposit"
+    Array<Bucket>(
+        Bucket("raw_supply")
+    )
+;
+
+TAKE_ALL_FROM_WORKTOP
+    Address("resource_rdx1thw2u4uss739j8cqumehgf5wyw26chcfu98newsu42zhln7wd050ee")
+    Bucket("supply")
+;
+
+# Take 0XRD as payment for opening the CDP
+CALL_METHOD
+    Address("account_rdx12y4jmlyavnm3fkdc2ckuxpslnvt07cy8txmnyglve855q7m0akjtqp")
+    "withdraw"
+    Address("resource_rdx1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxradxrd")
+    Decimal("0")
+;
+TAKE_FROM_WORKTOP
+    Address("resource_rdx1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxradxrd")
+    Decimal("0")
+    Bucket("fee")
+;
+
+# Create position with w2-xUSDC supply
+CALL_METHOD
+    Address("component_rdx1cpy6putj5p7937clqgcgutza7k53zpha039n9u5hkk0ahh4stdmq4w")
+    "create_cdp"
+    Bucket("fee")
+    Enum<1u8>(
+        "L3// Leveraged 1"
+    )
+    Enum<0u8>()
+    Enum<0u8>()
+    Array<Bucket>(
+        Bucket("supply")
+    )
+    Array<Bucket>()
+    Map<Address, Decimal>()
+;
+
+# Create CDP Bucket
+TAKE_NON_FUNGIBLES_FROM_WORKTOP
+    Address("resource_rdx1nt22yfvhuuhxww7jnnml5ec3yt5pkxh0qlghm6f0hz46z2wfk80s9r")
+    Array<NonFungibleLocalId>(
+        NonFungibleLocalId("#219#"),
+    )
+    Bucket("cdp")
+;
+
+# Make proof from CDP
+CREATE_PROOF_FROM_BUCKET_OF_ALL
+    Bucket("cdp")
+    Proof("cdp")
+;
+
+# Borrow xwBTC 
+CALL_METHOD
+    Address("component_rdx1cpy6putj5p7937clqgcgutza7k53zpha039n9u5hkk0ahh4stdmq4w")
+    "cdp_batch_operation"
+    Proof("cdp")
+    Array<Bucket>()
+    Array<Bucket>()
+    Map<Address, Decimal>(
+        Address("resource_rdx1t580qxc7upat7lww4l2c4jckacafjeudxj5wpjrrct0p3e82sq4y75") => Decimal("0.0001133693358")
+    )
+    Array<Bucket>()
+    Map<Address, Decimal>()
+    Map<Address, Array>()
+;
+
+# ------------------ OciSwap ----------------- #
+
+# Swap xwBTC to XRD
+TAKE_ALL_FROM_WORKTOP
+    Address("resource_rdx1t580qxc7upat7lww4l2c4jckacafjeudxj5wpjrrct0p3e82sq4y75")
+    Bucket("input_bucket_0")
+;
+CALL_METHOD
+    Address("component_rdx1cpgmgrskahkxe4lnpp9s2f5ga0z8jkl7ne8gjmw3fc2224lxq505mr")
+    "swap"
+    Bucket("input_bucket_0")
+;
+
+# Swap XRD to xUSDC
+TAKE_ALL_FROM_WORKTOP
+    Address("resource_rdx1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxradxrd")
+    Bucket("input_bucket_1")
+;
+CALL_METHOD
+    Address("component_rdx1cz8daq5nwmtdju4hj5rxud0ta26wf90sdk5r4nj9fqjcde5eht8p0f")
+    "swap"
+    Bucket("input_bucket_1")
+;
+                    
+ASSERT_WORKTOP_CONTAINS
+    Address("resource_rdx1t4upr78guuapv5ept7d7ptekk9mqhy605zgms33mcszen8l9fac8vf")
+    Decimal("11.022011")
+;
+
+# ------------------- Weft ------------------- #
+
+# Collect all swapped xUSDC
+TAKE_ALL_FROM_WORKTOP
+    Address("resource_rdx1t4upr78guuapv5ept7d7ptekk9mqhy605zgms33mcszen8l9fac8vf")
+    Bucket("loan_repayment")
+;
+
+# Take loan terms
+TAKE_ALL_FROM_WORKTOP
+    Address("resource_rdx1nfeyk5cmjep98zae9vhg067elm2necwsvdnngp3je62ahqstsa8x2x")
+    Bucket("loan_terms")
+;
+
+# Repay flash loan
+CALL_METHOD
+    Address("component_rdx1czmr02yl4da709ceftnm9dnmag7rthu0tu78wmtsn5us9j02d9d0xn")
+    "repay_flash_loan"
+    Array<Bucket>(
+        Bucket("loan_repayment")
+    )
+    Bucket("loan_terms")
+;
+
+# ------------------- User ------------------- #
+
+# Deposit CDP into account
+CALL_METHOD
+    Address("account_rdx12y4jmlyavnm3fkdc2ckuxpslnvt07cy8txmnyglve855q7m0akjtqp")
+    "deposit"
+    Bucket("cdp")
+;
+
+CALL_METHOD
+    Address("account_rdx12y4jmlyavnm3fkdc2ckuxpslnvt07cy8txmnyglve855q7m0akjtqp")
+    "deposit_batch"
+    Expression("ENTIRE_WORKTOP")
+;

@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "L3 Radix",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}

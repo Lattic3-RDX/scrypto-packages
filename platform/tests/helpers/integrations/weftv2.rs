@@ -1,0 +1,201 @@
+use crate::helpers::prelude::*;
+use scrypto::prelude::indexmap::{IndexMap, IndexSet};
+use scrypto_test::prelude::*;
+
+//] ------------ Mock Implementation ----------- */
+#[derive(Debug, Clone, Copy)]
+pub struct MockWeftV2 {
+    pub cdp: ResourceAddress,
+    pub cdp_count: u64,
+}
+
+impl MockWeftV2 {
+    pub fn new(runner: &mut Runner) -> Self {
+        let owner_account = runner.owner_account;
+
+        // Create CDP NFT
+        let manifest = ManifestBuilder::new().lock_fee_from_faucet().create_non_fungible_resource(
+            OwnerRole::None,
+            NonFungibleIdType::Integer,
+            true,
+            // Allow anyone to mint/burn, keep rest as default
+            NonFungibleResourceRoles {
+                mint_roles: mint_roles! {
+                    minter         => rule!(allow_all);
+                    minter_updater => rule!(deny_all);
+                },
+                burn_roles: burn_roles! {
+                    burner         => rule!(allow_all);
+                    burner_updater => rule!(deny_all);
+                },
+                non_fungible_data_update_roles: non_fungible_data_update_roles! {
+                    non_fungible_data_updater         => rule!(allow_all);
+                    non_fungible_data_updater_updater => rule!(deny_all);
+                },
+                ..NonFungibleResourceRoles::default()
+            },
+            metadata!(
+                init {
+                    "name" => "Mock WeftV2 CDP", locked;
+                }
+            ),
+            None::<IndexMap<NonFungibleLocalId, CDPData>>,
+        );
+
+        // Execute manifest
+        // let receipt = runner
+        //     .ledger
+        //     .execute_manifest(manifest, vec![NonFungibleGlobalId::from_public_key(&runner.owner_account.public_key)]);
+
+        let receipt = runner.exec_and_dump("create_mock_cdp", manifest, &owner_account, Some("integrations/weftv2"));
+        receipt.expect_commit_success();
+
+        // Collect output
+        let cdp = receipt.expect_commit_success().new_resource_addresses()[0];
+
+        Self { cdp, cdp_count: 0 }
+    }
+
+    pub fn mint(
+        &mut self,
+        runner: &mut Runner,
+        target: SimAccount,
+        collaterals: Option<IndexMap<ResourceAddress, Decimal>>,
+        loans: Option<IndexMap<ResourceAddress, Decimal>>,
+        nft: bool,
+    ) -> NonFungibleLocalId {
+        // Convert loan mapping with decimal input to one with loan info
+        let loans = match loans {
+            Some(loans) => Self::map_loans(loans),
+            None => IndexMap::new(),
+        };
+
+        // Convert collateral mapping with decimal input to one with collateral info
+        let collaterals = match collaterals {
+            Some(collaterals) => Self::map_collaterals(collaterals),
+            None => IndexMap::new(),
+        };
+
+        // Create mock NFT collateral mapping
+        let nft_collaterals: IndexMap<ResourceAddress, NFTCollateralInfo> = match nft {
+            true => {
+                let info = NFTCollateralInfo { nft_ids: IndexSet::new(), config_version: IndexMap::new() };
+
+                indexmap! { self.cdp => info }
+            }
+            false => IndexMap::new(),
+        };
+
+        // Create CDP with mock data
+        let data = CDPData {
+            minted_at: Instant::new(0i64),
+            updated_at: Instant::new(0i64),
+            key_image_url: String::new(),
+            name: format!("Mock CDP {}", self.cdp_count),
+            description: String::new(),
+            loans,
+            collaterals,
+            nft_collaterals,
+        };
+
+        // Mint the CDP
+        let local_id = NonFungibleLocalId::Integer(self.cdp_count.into());
+        let manifest = ManifestBuilder::new()
+            .lock_fee_from_faucet()
+            .mint_non_fungible(self.cdp, [(local_id.clone(), data)])
+            .deposit_entire_worktop(target.address)
+            .build();
+
+        // Increment the CDP count
+        self.cdp_count += 1;
+
+        // Execute the manifest
+        let receipt = runner.ledger.execute_manifest(manifest, vec![target.global_id()]);
+        receipt.expect_commit_success();
+
+        // Return the local id
+        local_id
+    }
+
+    pub fn mint_empty(&mut self, runner: &mut Runner, target: SimAccount) -> NonFungibleLocalId {
+        self.mint(runner, target, None, None, false)
+    }
+
+    pub fn map_collaterals(collaterals: IndexMap<ResourceAddress, Decimal>) -> IndexMap<ResourceAddress, CollateralInfo> {
+        collaterals
+            .iter()
+            .map(|(&address, &amount)| {
+                let info = CollateralInfo {
+                    amount,
+                    config_version: CollateralConfigVersion { entry_version: 1, efficiency_mode: EfficiencyMode::None },
+                };
+
+                (address, info)
+            })
+            .collect()
+    }
+
+    pub fn map_loans(loans: IndexMap<ResourceAddress, Decimal>) -> IndexMap<ResourceAddress, LoanInfo> {
+        loans
+            .iter()
+            .map(|(&address, &units)| (address, LoanInfo { units, config_version: 1 }))
+            .collect()
+    }
+}
+
+/* ---------------- Integration --------------- */
+#[derive(ScryptoSbor, Debug, Clone, PartialEq, Copy, ManifestSbor)]
+pub enum EfficiencyMode {
+    None,
+    EfficiencyGroup(u16),
+    IdenticalResource,
+}
+
+#[derive(ScryptoSbor, Debug, Clone, PartialEq, Copy, ManifestSbor)]
+pub struct CollateralConfigVersion {
+    pub entry_version: u64,
+    pub efficiency_mode: EfficiencyMode,
+}
+
+#[derive(ScryptoSbor, Debug, Clone, ManifestSbor)]
+pub struct CollateralInfo {
+    pub amount: Decimal,
+    pub config_version: CollateralConfigVersion,
+}
+
+#[derive(ScryptoSbor, Debug, Clone, Default, ManifestSbor)]
+pub struct NFTCollateralInfo {
+    pub nft_ids: IndexSet<NonFungibleLocalId>,
+    pub config_version: IndexMap<ResourceAddress, CollateralConfigVersion>,
+}
+
+#[derive(ScryptoSbor, Debug, Clone, ManifestSbor)]
+pub struct LoanInfo {
+    pub units: Decimal,
+    pub config_version: u64,
+}
+
+/// Struct definition to store CDP data.
+#[derive(ScryptoSbor, NonFungibleData, Debug, Clone, ManifestSbor)]
+pub struct CDPData {
+    // #[immutable]
+    minted_at: Instant,
+    #[mutable]
+    updated_at: Instant,
+
+    // Wallet metadata
+    #[mutable]
+    key_image_url: String,
+    #[mutable]
+    name: String,
+    #[mutable]
+    description: String,
+
+    // Positions data
+    #[mutable]
+    pub loans: IndexMap<ResourceAddress, LoanInfo>,
+    #[mutable]
+    pub collaterals: IndexMap<ResourceAddress, CollateralInfo>,
+    #[mutable]
+    pub nft_collaterals: IndexMap<ResourceAddress, NFTCollateralInfo>,
+}

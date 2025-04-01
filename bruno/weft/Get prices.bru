@@ -1,0 +1,28 @@
+meta {
+  name: Get prices
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{gateway}}/state/entity/details
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "addresses": [
+      "component_rdx1cz9u0svc4d2jtnkdqypxpcea8cj3da9vdqakrt748ackl82khfxv25"
+    ],
+    "aggregation_level": "Vault",
+    "opt_ins": {
+      "non_fungible_include_nfids": true,
+      "native_resource_details": true,
+      "explicit_metadata": [
+        "name",
+        "description"
+      ]
+    }
+  }
+}

@@ -1,0 +1,37 @@
+meta {
+  name: (P) Open position
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{gateway}}/transaction/preview
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "manifest": "{{manifest}}",
+    "start_epoch_inclusive": 179367,
+    "end_epoch_exclusive": 179368,
+    "tip_percentage": 0,
+    "nonce": 1,
+    "signer_public_keys": [],
+    "flags": {
+      "use_free_credit": true,
+      "assume_all_signature_proofs": true,
+      "skip_epoch_check": true
+    }
+  }
+}
+
+vars:pre-request {
+  xrd_addr: resource_rdx1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxradxrd
+}
+
+script:pre-request {
+  const manifest = ``
+  
+  bru.setEnvVar()
+}
